@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.13.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\runRobot.Core\runRobot.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Runtime assets: script from Core, model/MET data from WinForms assets -->
+  <ItemGroup>
+    <None Update="..\runRobot.Core\src\scripts\pose_analyzer.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>scripts\pose_analyzer.py</Link>
+    </None>
+    <None Update="..\runRobot\assets\MLModels\pose_landmarker_heavy.task">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>MLModels\pose_landmarker_heavy.task</Link>
+    </None>
+    <None Update="..\runRobot\assets\MET\walking_met.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>MET\walking_met.json</Link>
+    </None>
+    <None Update="..\runRobot\assets\MET\running_met.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>MET\running_met.json</Link>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,240 @@
+using runRobot.Models;
+using runRobot.Preprocessing;
+using runRobot.Storage;
+
+namespace runRobot.UI;
+
+/// <summary>
+/// Sidebar panel that manages settings presets and exposes all pipeline
+/// configuration values for MainWindow to read when running.
+/// </summary>
+public class PresetPanel : UserControl
+{
+    private readonly ComboBox _combo;
+    private readonly Button   _saveBtn;
+    private readonly Button   _delBtn;
+
+    /// <summary>Minimum width (px) needed to show all controls without clipping.</summary>
+    public int MinimumWidth =>
+        90 /* col0 */ +
+        _combo.Width + _combo.Margin.Horizontal +
+        _saveBtn.PreferredSize.Width + _saveBtn.Margin.Horizontal +
+        _delBtn.PreferredSize.Width + _delBtn.Margin.Horizontal;
+    private readonly TextBox  _maxFramesBox;
+    private readonly TextBox  _stepThresholdBox;
+    private readonly TextBox  _stanceToleranceBox;
+    private readonly CheckBox _debugStepsBox;
+    private readonly ComboBox _yawMethodCombo;
+    private readonly CheckBox _perspectiveCorrectionBox;
+    private readonly CheckBox _temporalSmoothingBox;
+    private readonly CheckBox _visibilityInterpolationBox;
+
+    private List<SettingsPreset> _presets = [];
+
+    // --- Properties read by MainWindow on Run ---
+
+    public int?   MaxFrames      => int.TryParse(_maxFramesBox.Text, out int mf) && mf > 0 ? mf : null;
+    public double StepThreshold  => double.TryParse(_stepThresholdBox.Text,  out double th) ? th : 0;
+    public double StanceTolerance => (double.TryParse(_stanceToleranceBox.Text, out double st) ? st : 5.0) / 100.0;
+    public YawCorrectionMethod YawMethod => _yawMethodCombo.SelectedIndex switch
+    {
+        1 => YawCorrectionMethod.PerFrame,
+        2 => YawCorrectionMethod.NoYaw,
+        _ => YawCorrectionMethod.Median,
+    };
+
+    public bool PerspectiveCorrection   => _perspectiveCorrectionBox.Checked;
+    public bool TemporalSmoothing       => _temporalSmoothingBox.Checked;
+    public bool VisibilityInterpolation => _visibilityInterpolationBox.Checked;
+
+    /// <summary>Snapshot of current UI state as a SettingsPreset (Name left empty).</summary>
+    public SettingsPreset CurrentSettings => new()
+    {
+        MaxFrames               = MaxFrames,
+        StepThreshold           = StepThreshold,
+        StanceTolerance         = StanceTolerance * 100,
+        YawCorrectionMethod     = YawMethod.ToString(),
+        PerspectiveCorrection   = PerspectiveCorrection,
+        TemporalSmoothing       = TemporalSmoothing,
+        VisibilityInterpolation = VisibilityInterpolation,
+        DebugSteps              = _debugStepsBox.Checked,
+    };
+
+    public PresetPanel()
+    {
+        AutoSize     = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
+        var table = new TableLayoutPanel
+        {
+            AutoSize     = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock         = DockStyle.Top,
+            ColumnCount  = 2,
+            Padding      = new Padding(0),
+        };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // Row 0: separator line
+        var separator = new Panel { Dock = DockStyle.Fill, BackColor = SystemColors.ControlDark, Margin = new Padding(0, 8, 0, 6), Height = 1 };
+        table.Controls.Add(separator, 0, 0);
+        table.SetColumnSpan(separator, 2);
+
+        // Row 1: section header
+        var header = new Label { Text = "Settings", Font = new Font(Font, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
+        table.Controls.Add(header, 0, 1);
+        table.SetColumnSpan(header, 2);
+
+        // Row 2: preset selector
+        table.Controls.Add(SideLabel("Preset"), 0, 2);
+        _combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, Width = 90, Margin = new Padding(0, 1, 2, 0) };
+        _combo.SelectedIndexChanged += OnSelected;
+        _saveBtn = new Button { Text = "Save",   AutoSize = true, Margin = new Padding(0, 0, 2, 0) };
+        _delBtn  = new Button { Text = "Delete", AutoSize = true, Margin = new Padding(0) };
+        _saveBtn.Click += OnSave;
+        _delBtn.Click  += OnDelete;
+        var row2 = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0), Margin = new Padding(0) };
+        row2.Controls.AddRange((Control[])[_combo, _saveBtn, _delBtn]);
+        table.Controls.Add(row2, 1, 2);
+
+        // Row 3: max frames
+        table.Controls.Add(SideLabel("Max frames"), 0, 3);
+        _maxFramesBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 1, 0, 0) };
+        table.Controls.Add(_maxFramesBox, 1, 3);
+
+        // Row 4: step threshold
+        table.Controls.Add(SideLabel("Step threshold"), 0, 4);
+        _stepThresholdBox = new TextBox { Dock = DockStyle.Fill, Text = "0", Margin = new Padding(0, 1, 0, 0) };
+        table.Controls.Add(_stepThresholdBox, 1, 4);
+
+        // Row 5: stance tolerance
+        table.Controls.Add(SideLabel("Stance tolerance"), 0, 5);
+        _stanceToleranceBox = new TextBox { Dock = DockStyle.Fill, Text = "5", Margin = new Padding(0, 1, 0, 0) };
+        table.Controls.Add(_stanceToleranceBox, 1, 5);
+
+        // Row 6: debug steps (full width)
+        _debugStepsBox = new CheckBox { Text = "Debug steps", AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
+        table.Controls.Add(_debugStepsBox, 0, 6);
+        table.SetColumnSpan(_debugStepsBox, 2);
+
+        // Row 7: yaw correction
+        table.Controls.Add(SideLabel("Yaw correction"), 0, 7);
+        _yawMethodCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 1, 0, 0) };
+        _yawMethodCombo.Items.AddRange((string[])["Median", "Per Frame", "No Yaw"]);
+        _yawMethodCombo.SelectedIndex = 0;
+        table.Controls.Add(_yawMethodCombo, 1, 7);
+
+        // Row 8: perspective correction (full width)
+        _perspectiveCorrectionBox = new CheckBox { Text = "Perspective correction", AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
+        table.Controls.Add(_perspectiveCorrectionBox, 0, 8);
+        table.SetColumnSpan(_perspectiveCorrectionBox, 2);
+
+        // Row 9: temporal smoothing (full width)
+        _temporalSmoothingBox = new CheckBox { Text = "Temporal smoothing", AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
+        table.Controls.Add(_temporalSmoothingBox, 0, 9);
+        table.SetColumnSpan(_temporalSmoothingBox, 2);
+
+        // Row 10: visibility interpolation (full width)
+        _visibilityInterpolationBox = new CheckBox { Text = "Visibility interpolation", AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
+        table.Controls.Add(_visibilityInterpolationBox, 0, 10);
+        table.SetColumnSpan(_visibilityInterpolationBox, 2);
+
+        Controls.Add(table);
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        _presets = AppDataStore.LoadPresets();
+        RefreshCombo();
+    }
+
+    private void RefreshCombo()
+    {
+        _combo.SelectedIndexChanged -= OnSelected;
+        _combo.Items.Clear();
+        foreach (var p in _presets) _combo.Items.Add(p.Name);
+        _combo.SelectedIndexChanged += OnSelected;
+    }
+
+    private void OnSelected(object? sender, EventArgs e)
+    {
+        if (_combo.SelectedIndex >= 0)
+            Apply(_presets[_combo.SelectedIndex]);
+    }
+
+    private void Apply(SettingsPreset preset)
+    {
+        _maxFramesBox.Text       = preset.MaxFrames?.ToString() ?? "";
+        _stepThresholdBox.Text   = preset.StepThreshold.ToString();
+        _stanceToleranceBox.Text = preset.StanceTolerance.ToString();
+        int idx = _yawMethodCombo.Items.IndexOf(preset.YawCorrectionMethod);
+        if (idx >= 0) _yawMethodCombo.SelectedIndex = idx;
+        _perspectiveCorrectionBox.Checked   = preset.PerspectiveCorrection;
+        _temporalSmoothingBox.Checked       = preset.TemporalSmoothing;
+        _visibilityInterpolationBox.Checked = preset.VisibilityInterpolation;
+        _debugStepsBox.Checked              = preset.DebugSteps;
+    }
+
+    private void OnSave(object? sender, EventArgs e)
+    {
+        string name = _combo.Text.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            name = Prompt("Enter preset name:") ?? "";
+            if (string.IsNullOrEmpty(name)) return;
+        }
+
+        var preset = new SettingsPreset
+        {
+            Name                    = name,
+            MaxFrames               = MaxFrames,
+            StepThreshold           = StepThreshold,
+            StanceTolerance         = double.TryParse(_stanceToleranceBox.Text, out double st) ? st : 5,
+            YawCorrectionMethod     = _yawMethodCombo.SelectedItem?.ToString() ?? "Median",
+            PerspectiveCorrection   = PerspectiveCorrection,
+            TemporalSmoothing       = TemporalSmoothing,
+            VisibilityInterpolation = VisibilityInterpolation,
+            DebugSteps              = _debugStepsBox.Checked,
+        };
+
+        int idx = _presets.FindIndex(p => p.Name == name);
+        if (idx >= 0) _presets[idx] = preset;
+        else          _presets.Add(preset);
+
+        AppDataStore.SavePresets(_presets);
+        RefreshCombo();
+        _combo.SelectedItem = name;
+    }
+
+    private void OnDelete(object? sender, EventArgs e)
+    {
+        if (_combo.SelectedIndex < 0) return;
+        string name = _combo.SelectedItem!.ToString()!;
+        _presets.RemoveAll(p => p.Name == name);
+        AppDataStore.SavePresets(_presets);
+        RefreshCombo();
+        _combo.Text = "";
+    }
+
+    private static Label SideLabel(string text) =>
+        new() { Text = text, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 2, 4, 0) };
+
+    private string? Prompt(string message)
+    {
+        var form = new Form
+        {
+            Text = "runRobot", Size = new Size(300, 120),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition   = FormStartPosition.CenterParent,
+            MinimizeBox = false, MaximizeBox = false,
+        };
+        var lbl = new Label  { Text = message, Location = new Point(10, 10), AutoSize = true };
+        var txt = new TextBox { Location = new Point(10, 30), Width = 265 };
+        var ok  = new Button  { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(110, 58), Width = 75 };
+        form.Controls.AddRange((Control[])[lbl, txt, ok]);
+        form.AcceptButton = ok;
+        return form.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
+    }
+}

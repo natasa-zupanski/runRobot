@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\runRobot.Core\runRobot.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Scripts: sourced from Core where PoseAnalyzer.cs lives -->
+    <None Update="..\runRobot.Core\src\scripts\pose_analyzer.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>scripts/pose_analyzer.py</Link>
+    </None>
+    <None Update="assets/MLModels/pose_landmarker_heavy.task">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>MLModels\pose_landmarker_heavy.task</Link>
+    </None>
+    <None Update="assets/MET\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>MET\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
+  </ItemGroup>
+
+</Project>

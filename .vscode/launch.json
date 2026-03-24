@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Debug",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Build",
+            "program": "${workspaceFolder}/runRobot/bin/Debug/net10.0-windows/runRobot.dll",
+            "args": [
+                "input/cropped_pexels_video.mp4",
+                "120",
+                "--debug-steps"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal"
+        }
+    ]
+}

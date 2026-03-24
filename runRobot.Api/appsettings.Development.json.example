@@ -1,0 +1,5 @@
+{
+  "ApiKeys": [
+    { "Key": "replace-with-a-secret-string", "Machine": "YOUR-MACHINE-NAME" }
+  ]
+}

@@ -1,0 +1,37 @@
+# Build results
+bin/
+obj/
+
+# Analysis input (videos)
+input/
+*.mp4
+
+# Analysis output
+output/
+
+# Visualization output
+frames/
+*.png
+
+# User-specific files
+.vs/
+.vscode/settings.json
+
+# IDE
+*.csproj.user
+
+# Test results
+TestResults/
+
+# Python
+__pycache__/
+*.pyc
+
+# ML model weights (large binary, download separately)
+*.task
+
+# API secrets — use appsettings.Development.json for real keys (see appsettings.Development.json.example)
+appsettings.Development.json
+
+# Claude Code project instructions (contains internal dev notes)
+CLAUDE.md
