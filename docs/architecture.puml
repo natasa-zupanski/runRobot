@@ -307,8 +307,6 @@ package "runRobot.UI" #FFFEF0 {
     -_weightBox : TextBox
     -_weightUnitCombo : ComboBox
     +MinimumWidth : int
-    +HipHeightMeters : double?
-    +WeightKg : double?
     +CurrentProfile : UserProfile
     -_profiles : List<UserProfile>
     -Apply(profile)
@@ -347,14 +345,24 @@ package "runRobot.UI" #FFFEF0 {
     +{static} DrawFrame(frame) : Bitmap
   }
 
+  class SideLabel {
+    +SideLabel(text, topMargin)
+  }
+
+  class PromptDialog <<static>> {
+    +{static} Show(message, owner) : string?
+  }
+
   MainWindow *-- "1" ProfilePanel
   MainWindow *-- "1" PresetPanel
   MainWindow *-- "1" FrameViewPanel
 
   ProfilePanel ..> AppDataStore : uses
   ProfilePanel ..> UserProfile : manages
+  ProfilePanel ..> PromptDialog : uses
   PresetPanel ..> AppDataStore : uses
   PresetPanel ..> SettingsPreset : manages
+  PresetPanel ..> PromptDialog : uses
   FrameViewPanel ..> SpeedEstimationResult : reads
   FrameViewPanel ..> CalorieEstimationResult : reads
 }
