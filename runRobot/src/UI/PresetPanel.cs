@@ -82,7 +82,7 @@ public class PresetPanel : UserControl
         table.SetColumnSpan(header, 2);
 
         // Row 2: preset selector
-        table.Controls.Add(SideLabel("Preset"), 0, 2);
+        table.Controls.Add(new SideLabel("Preset"), 0, 2);
         _combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, Width = 90, Margin = new Padding(0, 1, 2, 0) };
         _combo.SelectedIndexChanged += OnSelected;
         _saveBtn = new Button { Text = "Save",   AutoSize = true, Margin = new Padding(0, 0, 2, 0) };
@@ -94,17 +94,17 @@ public class PresetPanel : UserControl
         table.Controls.Add(row2, 1, 2);
 
         // Row 3: max frames
-        table.Controls.Add(SideLabel("Max frames"), 0, 3);
+        table.Controls.Add(new SideLabel("Max frames"), 0, 3);
         _maxFramesBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 1, 0, 0) };
         table.Controls.Add(_maxFramesBox, 1, 3);
 
         // Row 4: step threshold
-        table.Controls.Add(SideLabel("Step threshold"), 0, 4);
+        table.Controls.Add(new SideLabel("Step threshold"), 0, 4);
         _stepThresholdBox = new TextBox { Dock = DockStyle.Fill, Text = "0", Margin = new Padding(0, 1, 0, 0) };
         table.Controls.Add(_stepThresholdBox, 1, 4);
 
         // Row 5: stance tolerance
-        table.Controls.Add(SideLabel("Stance tolerance"), 0, 5);
+        table.Controls.Add(new SideLabel("Stance tolerance"), 0, 5);
         _stanceToleranceBox = new TextBox { Dock = DockStyle.Fill, Text = "5", Margin = new Padding(0, 1, 0, 0) };
         table.Controls.Add(_stanceToleranceBox, 1, 5);
 
@@ -114,7 +114,7 @@ public class PresetPanel : UserControl
         table.SetColumnSpan(_debugStepsBox, 2);
 
         // Row 7: yaw correction
-        table.Controls.Add(SideLabel("Yaw correction"), 0, 7);
+        table.Controls.Add(new SideLabel("Yaw correction"), 0, 7);
         _yawMethodCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 1, 0, 0) };
         _yawMethodCombo.Items.AddRange((string[])["Median", "Per Frame", "No Yaw"]);
         _yawMethodCombo.SelectedIndex = 0;
@@ -176,7 +176,7 @@ public class PresetPanel : UserControl
         string name = _combo.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            name = Prompt("Enter preset name:") ?? "";
+            name = PromptDialog.Show("Enter preset name:", this) ?? "";
             if (string.IsNullOrEmpty(name)) return;
         }
 
@@ -202,23 +202,4 @@ public class PresetPanel : UserControl
         _combo.Text = "";
     }
 
-    private static Label SideLabel(string text) =>
-        new() { Text = text, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 2, 4, 0) };
-
-    private string? Prompt(string message)
-    {
-        var form = new Form
-        {
-            Text = "runRobot", Size = new Size(300, 120),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            StartPosition   = FormStartPosition.CenterParent,
-            MinimizeBox = false, MaximizeBox = false,
-        };
-        var lbl = new Label  { Text = message, Location = new Point(10, 10), AutoSize = true };
-        var txt = new TextBox { Location = new Point(10, 30), Width = 265 };
-        var ok  = new Button  { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(110, 58), Width = 75 };
-        form.Controls.AddRange((Control[])[lbl, txt, ok]);
-        form.AcceptButton = ok;
-        return form.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
-    }
 }

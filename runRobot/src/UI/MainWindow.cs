@@ -45,7 +45,7 @@ public class MainWindow : Form
         sidebarScroll.Controls.Add(_sidebar);
 
         // Row 0: Video path
-        _sidebar.Controls.Add(SideLabel("Video path"), 0, 0);
+        _sidebar.Controls.Add(new SideLabel("Video path", topMargin: 6), 0, 0);
         _videoPathBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true };
         _sidebar.Controls.Add(_videoPathBox, 1, 0);
 
@@ -89,9 +89,6 @@ public class MainWindow : Form
         _split.SplitterDistance = preferred;
         _split.Panel1MinSize    = preferred;
     }
-
-    private static Label SideLabel(string text) =>
-        new() { Text = text, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 6, 4, 0) };
 
     private async void OnBrowse(object? sender, EventArgs e)
     {

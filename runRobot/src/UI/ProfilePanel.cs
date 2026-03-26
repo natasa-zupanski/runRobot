@@ -5,7 +5,7 @@ namespace runRobot.UI;
 
 /// <summary>
 /// Sidebar panel that manages user profiles (name + hip height + weight).
-/// Exposes HipHeightMeters and WeightKg for MainWindow to pass to the estimators.
+/// Exposes <see cref="CurrentProfile"/> for <see cref="MainWindow"/> to pass to the analysis pipeline.
 /// </summary>
 public class ProfilePanel : UserControl
 {
@@ -26,16 +26,6 @@ public class ProfilePanel : UserControl
 
     private List<UserProfile> _profiles = [];
 
-    /// <summary>Hip height converted to metres, or null if empty/invalid.</summary>
-    public double? HipHeightMeters
-    {
-        get
-        {
-            if (!double.TryParse(_hipHeightBox.Text, out double h) || h <= 0) return null;
-            return _unitCombo.SelectedItem?.ToString() == "in" ? h * 0.0254 : h / 100.0;
-        }
-    }
-
     /// <summary>Snapshot of current UI state as a UserProfile (Name left empty).</summary>
     public UserProfile CurrentProfile => new()
     {
@@ -44,16 +34,6 @@ public class ProfilePanel : UserControl
         Weight        = double.TryParse(_weightBox.Text, out double w) && w > 0 ? w : null,
         WeightUnit    = _weightUnitCombo.SelectedItem?.ToString() ?? "kg",
     };
-
-    /// <summary>Weight converted to kilograms, or null if empty/invalid.</summary>
-    public double? WeightKg
-    {
-        get
-        {
-            if (!double.TryParse(_weightBox.Text, out double w) || w <= 0) return null;
-            return _weightUnitCombo.SelectedItem?.ToString() == "lbs" ? w * 0.453592 : w;
-        }
-    }
 
     public ProfilePanel()
     {
@@ -77,7 +57,7 @@ public class ProfilePanel : UserControl
         table.SetColumnSpan(header, 2);
 
         // Row 1: profile selector
-        table.Controls.Add(SideLabel("Profile"), 0, 1);
+        table.Controls.Add(new SideLabel("Profile"), 0, 1);
         _combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, Width = 90, Margin = new Padding(0, 1, 2, 0) };
         _combo.SelectedIndexChanged += OnSelected;
         _saveBtn = new Button { Text = "Save",   AutoSize = true, Margin = new Padding(0, 0, 2, 0) };
@@ -89,7 +69,7 @@ public class ProfilePanel : UserControl
         table.Controls.Add(row1, 1, 1);
 
         // Row 2: hip height
-        table.Controls.Add(SideLabel("Hip height"), 0, 2);
+        table.Controls.Add(new SideLabel("Hip height"), 0, 2);
         _hipHeightBox = new TextBox { Width = 55, Margin = new Padding(0, 1, 2, 0) };
         _unitCombo    = new ComboBox { Width = 48, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 1, 0, 0) };
         _unitCombo.Items.AddRange((string[])["cm", "in"]);
@@ -100,7 +80,7 @@ public class ProfilePanel : UserControl
         table.Controls.Add(row2, 1, 2);
 
         // Row 3: weight
-        table.Controls.Add(SideLabel("Weight"), 0, 3);
+        table.Controls.Add(new SideLabel("Weight"), 0, 3);
         _weightBox       = new TextBox { Width = 55, Margin = new Padding(0, 1, 2, 0) };
         _weightUnitCombo = new ComboBox { Width = 48, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 1, 0, 0) };
         _weightUnitCombo.Items.AddRange((string[])["kg", "lbs"]);
@@ -150,18 +130,12 @@ public class ProfilePanel : UserControl
         string name = _combo.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            name = Prompt("Enter profile name:") ?? "";
+            name = PromptDialog.Show("Enter profile name:", this) ?? "";
             if (string.IsNullOrEmpty(name)) return;
         }
 
-        var profile = new UserProfile
-        {
-            Name          = name,
-            HipHeight     = double.TryParse(_hipHeightBox.Text, out double h) && h > 0 ? h : null,
-            HipHeightUnit = _unitCombo.SelectedItem?.ToString() ?? "cm",
-            Weight        = double.TryParse(_weightBox.Text, out double w) && w > 0 ? w : null,
-            WeightUnit    = _weightUnitCombo.SelectedItem?.ToString() ?? "kg",
-        };
+        var profile = CurrentProfile;
+        profile.Name = name;
 
         int idx = _profiles.FindIndex(p => p.Name == name);
         if (idx >= 0) _profiles[idx] = profile;
@@ -182,23 +156,4 @@ public class ProfilePanel : UserControl
         _combo.Text = "";
     }
 
-    private static Label SideLabel(string text) =>
-        new() { Text = text, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 2, 4, 0) };
-
-    private string? Prompt(string message)
-    {
-        var form = new Form
-        {
-            Text = "runRobot", Size = new Size(300, 120),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            StartPosition   = FormStartPosition.CenterParent,
-            MinimizeBox = false, MaximizeBox = false,
-        };
-        var lbl = new Label  { Text = message, Location = new Point(10, 10), AutoSize = true };
-        var txt = new TextBox { Location = new Point(10, 30), Width = 265 };
-        var ok  = new Button  { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(110, 58), Width = 75 };
-        form.Controls.AddRange((Control[])[lbl, txt, ok]);
-        form.AcceptButton = ok;
-        return form.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
-    }
 }
