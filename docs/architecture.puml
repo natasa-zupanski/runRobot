@@ -353,12 +353,6 @@ package "runRobot.UI" #FFFEF0 {
     #OnFormClosed(e)
   }
 
-  class LaunchDialog {
-    +ResultArgs : string[]
-    -OnBrowse()
-    -OnOk()
-  }
-
   MainWindow *-- "1" ProfilePanel
   MainWindow *-- "1" PresetPanel
   MainWindow *-- "1" FrameViewPanel
