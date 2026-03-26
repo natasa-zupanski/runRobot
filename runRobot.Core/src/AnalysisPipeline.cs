@@ -41,10 +41,77 @@ public class AnalysisPipeline(string scriptPath)
         UserProfile?       profile  = null,
         IProgress<string>? progress = null)
     {
-        // ── Derive typed values from model fields ──────────────────────────────
+        var (hipHeightMeters, weightKg) = ResolveProfile(profile);
 
-        double stanceTolerance = settings.StanceTolerance / 100.0;
+        progress?.Report("Analyzing video…");
+        var poseFrames = await ExtractPosesAsync(videoPath, settings.MaxFrames);
 
+        progress?.Report("Correcting pose…");
+        var (correctedFrames, pipeline) = await CorrectPosesAsync(poseFrames, settings, aspectRatio);
+
+        progress?.Report("Counting steps…");
+        var (estimatedSteps, stepDebugLog) = CountSteps(correctedFrames, settings);
+
+        progress?.Report("Estimating speed…");
+        var speedResult = await EstimateSpeedAsync(pipeline, correctedFrames, aspectRatio, hipHeightMeters, settings.StanceTolerance / 100.0);
+
+        var calorieResult = EstimateCalories(speedResult, weightKg);
+
+        progress?.Report($"Done — {correctedFrames.Count} frames");
+
+        return new AnalysisResult
+        {
+            PoseFrames     = poseFrames,
+            EstimatedSteps = estimatedSteps,
+            SpeedResult    = speedResult,
+            CalorieResult  = calorieResult,
+            StepDebugLog   = stepDebugLog,
+        };
+    }
+
+    private async Task<List<PoseFrame>> ExtractPosesAsync(string videoPath, int? maxFrames)
+    {
+        var analyzer = new PoseAnalyzer(scriptPath, verbose: false);
+        return await analyzer.AnalyzeVideoAsync(videoPath, maxFrames);
+    }
+
+    private static async Task<(List<PoseFrame> Frames, PoseCorrectorPipeline Pipeline)> CorrectPosesAsync(
+        List<PoseFrame> frames, SettingsPreset settings, double aspectRatio)
+    {
+        var pipeline  = new PoseCorrectorPipeline(settings);
+        var corrected = await Task.Run(() => pipeline.Correct(frames, aspectRatio));
+        return (corrected, pipeline);
+    }
+
+    private static (int Steps, string? DebugLog) CountSteps(List<PoseFrame> frames, SettingsPreset settings)
+    {
+        StringWriter? debugWriter = settings.DebugSteps ? new StringWriter() : null;
+        int steps = new StepEstimator().EstimateSteps(
+            frames, debug: settings.DebugSteps, threshold: settings.StepThreshold,
+            debugOutput: debugWriter);
+        return (steps, debugWriter?.ToString());
+    }
+
+    private static async Task<SpeedEstimationResult> EstimateSpeedAsync(
+        PoseCorrectorPipeline pipeline, List<PoseFrame> corrected,
+        double aspectRatio, double? hipHeightMeters, double stanceTolerance)
+    {
+        return await Task.Run(() =>
+        {
+            var projected = pipeline.Project(corrected, aspectRatio);
+            return new SpeedEstimator(stanceTolerance)
+                .Estimate(projected, hipHeightMeters, methodUsed: pipeline.MethodUsed);
+        });
+    }
+
+    private static CalorieEstimationResult? EstimateCalories(SpeedEstimationResult speedResult, double? weightKg)
+    {
+        if (!weightKg.HasValue) return null;
+        return CalorieEstimator.LoadFromAssets().Estimate(speedResult, weightKg.Value);
+    }
+
+    private static (double? HipHeightMeters, double? WeightKg) ResolveProfile(UserProfile? profile)
+    {
         double? hipHeightMeters = profile?.HipHeight.HasValue == true
             ? profile.HipHeightUnit == "in"
                 ? profile.HipHeight.Value * 0.0254
@@ -57,54 +124,6 @@ public class AnalysisPipeline(string scriptPath)
                 : profile.Weight.Value
             : null;
 
-        // ── Stage 1: pose extraction ───────────────────────────────────────────
-
-        progress?.Report("Analyzing video…");
-        var analyzer   = new PoseAnalyzer(scriptPath, verbose: false);
-        var poseFrames = await analyzer.AnalyzeVideoAsync(videoPath, settings.MaxFrames);
-
-        // ── Stage 2: pose correction ───────────────────────────────────────────
-
-        progress?.Report("Correcting pose…");
-        var pipeline        = new PoseCorrectorPipeline(settings);
-        var correctedFrames = await Task.Run(() => pipeline.Correct(poseFrames, aspectRatio));
-
-        // ── Stage 3: step count (on corrected frames) ──────────────────────────
-
-        progress?.Report("Counting steps…");
-        StringWriter? debugWriter = settings.DebugSteps ? new StringWriter() : null;
-        int estimatedSteps = new StepEstimator().EstimateSteps(
-            correctedFrames, debug: settings.DebugSteps, threshold: settings.StepThreshold,
-            debugOutput: debugWriter);
-
-        // ── Stage 4: speed estimation ──────────────────────────────────────────
-
-        progress?.Report("Estimating speed…");
-        var speedResult = await Task.Run(() =>
-        {
-            var projected = pipeline.Project(correctedFrames, aspectRatio);
-            return new SpeedEstimator(stanceTolerance)
-                .Estimate(projected, hipHeightMeters, methodUsed: pipeline.MethodUsed);
-        });
-
-        // ── Stage 5: calorie estimate (requires weight) ────────────────────────
-
-        CalorieEstimationResult? calorieResult = null;
-        if (weightKg.HasValue)
-        {
-            var calorieEstimator = CalorieEstimator.LoadFromAssets();
-            calorieResult = calorieEstimator.Estimate(speedResult, weightKg.Value);
-        }
-
-        progress?.Report($"Done — {correctedFrames.Count} frames");
-
-        return new AnalysisResult
-        {
-            PoseFrames     = poseFrames,
-            EstimatedSteps = estimatedSteps,
-            SpeedResult    = speedResult,
-            CalorieResult  = calorieResult,
-            StepDebugLog   = debugWriter?.ToString(),
-        };
+        return (hipHeightMeters, weightKg);
     }
 }
