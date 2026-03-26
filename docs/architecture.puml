@@ -126,7 +126,8 @@ package "runRobot.Preprocessing" #FFF8EE {
 
   class PoseCorrectorPipeline {
     +MethodUsed : YawCorrectionMethod
-    +Project(frames, aspectRatio) : List<SideViewFrame>
+    +Correct(frames, aspectRatio) : List<PoseFrame>
+    +Project(corrected, aspectRatio) : List<SideViewFrame>
   }
 
   PoseCorrector <|-- FramewiseCorrector
@@ -214,10 +215,9 @@ package "runRobot.Core" #FFF0F5 {
   }
 
   class SpeedEstimator {
-    -_projector : PoseCorrectorPipeline
     -_velocityAnalyzer : GaitVelocityAnalyzer
     -_speedEstimator : TreadmillSpeedEstimator
-    +Estimate(frames, hipHeightMeters, aspectRatio) : SpeedEstimationResult
+    +Estimate(projected, hipHeightMeters, methodUsed) : SpeedEstimationResult
     -ComputeScaleFactorFromSegments(frames, hipHeight) : double?
   }
 
@@ -247,13 +247,13 @@ package "runRobot.Core" #FFF0F5 {
     +RunAsync(videoPath, aspectRatio, settings, profile, progress) : Task<AnalysisResult>
   }
 
-  SpeedEstimator *-- "1" PoseCorrectorPipeline
   SpeedEstimator *-- "1" GaitVelocityAnalyzer
   SpeedEstimator *-- "1" TreadmillSpeedEstimator
   SpeedEstimator ..> SpeedEstimationResult : produces
 
   AnalysisPipeline ..> PoseAnalyzer : uses
   AnalysisPipeline ..> StepEstimator : uses
+  AnalysisPipeline ..> PoseCorrectorPipeline : uses
   AnalysisPipeline ..> SpeedEstimator : uses
   AnalysisPipeline ..> CalorieEstimator : uses
   AnalysisPipeline ..> AnalysisResult : produces
@@ -450,8 +450,7 @@ MainWindow ..> AnalysisResult : reads
 
 AnalyzeEndpoints ..> AnalysisPipeline : calls
 PoseAnalyzer ..> PoseFrame : produces
-SpeedEstimator ..> PoseFrame : consumes
-SpeedEstimator ..> SideViewFrame : produces (via PoseCorrectorPipeline)
+SpeedEstimator ..> SideViewFrame : consumes
 StepEstimator ..> PoseFrame : consumes
 GaitVelocityAnalyzer ..> SideViewFrame : consumes
 

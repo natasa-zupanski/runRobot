@@ -33,61 +33,45 @@ public class SpeedEstimationResult
 }
 
 /// <summary>
-/// End-to-end pipeline that takes raw PoseFrames and returns an estimated speed.
+/// Computes treadmill belt speed from projected 2D world-space frames.
 ///
 /// Stages:
-///   1. PoseCorrectorPipeline   — projects 3D landmarks into 2D world-space coordinates
-///   2. GaitVelocityAnalyzer — computes per-landmark velocities across the sequence
-///   3. TreadmillSpeedEstimator — derives belt speed from foot velocity during stance
+///   1. GaitVelocityAnalyzer    — computes per-landmark velocities across the sequence
+///   2. TreadmillSpeedEstimator — derives belt speed from foot velocity during stance
 ///
-/// Intermediate results are available on the returned SpeedEstimationResult if
-/// further analysis is needed.
+/// Pose correction and projection are handled upstream by <see cref="PoseCorrectorPipeline"/>
+/// before calling <see cref="Estimate"/>.
 /// </summary>
 public class SpeedEstimator
 {
-    private readonly PoseCorrectorPipeline _projector;
     private readonly GaitVelocityAnalyzer _velocityAnalyzer;
     private readonly TreadmillSpeedEstimator _speedEstimator;
 
-    /// <summary>
-    /// Creates a SpeedEstimator with default settings for all pipeline stages.
-    /// </summary>
-    /// <param name="projectionMethod">
-    ///     Controls yaw correction strategy. Median (default) estimates a single
-    ///     global yaw from all frames. PerFrame estimates yaw independently per
-    ///     frame. NoYaw skips yaw correction entirely.
-    /// </param>
-    public SpeedEstimator(YawCorrectionMethod projectionMethod = YawCorrectionMethod.Median,
-                          double stanceHeightTolerance = 0.05,
-                          IEnumerable<PoseCorrectorStep>? steps = null)
-        : this(
-            new PoseCorrectorPipeline(projectionMethod, steps),
-            new GaitVelocityAnalyzer(),
-            new TreadmillSpeedEstimator { StanceYTolerance = stanceHeightTolerance })
+    public SpeedEstimator(double stanceHeightTolerance = 0.05)
+        : this(new GaitVelocityAnalyzer(),
+               new TreadmillSpeedEstimator { StanceYTolerance = stanceHeightTolerance })
     { }
 
     /// <summary>
     /// Creates a SpeedEstimator with pre-configured pipeline components.
     /// Use this constructor to tune individual stage parameters.
     /// </summary>
-    public SpeedEstimator(
-        PoseCorrectorPipeline projector,
-        GaitVelocityAnalyzer velocityAnalyzer,
-        TreadmillSpeedEstimator speedEstimator)
+    public SpeedEstimator(GaitVelocityAnalyzer velocityAnalyzer, TreadmillSpeedEstimator speedEstimator)
     {
-        _projector        = projector;
         _velocityAnalyzer = velocityAnalyzer;
         _speedEstimator   = speedEstimator;
     }
 
     /// <summary>
-    /// Runs the full pipeline and returns the estimated speed along with all
-    /// intermediate results.
+    /// Estimates belt speed from pre-projected 2D world-space frames.
     /// </summary>
-    /// <param name="frames">Raw pose frames from MediaPipe.</param>
+    /// <param name="projected">Frames already processed by <see cref="PoseCorrectorPipeline.Project"/>.</param>
     /// <param name="hipHeightMeters">
     ///     Real-world hip height in metres. When provided, a <see cref="SpeedEstimationResult.ScaleFactor"/>
     ///     is computed so callers can convert world-unit speeds to m/s or mph.
+    /// </param>
+    /// <param name="methodUsed">
+    ///     The yaw correction strategy used during projection; stored on the result for reporting.
     /// </param>
     /// <param name="useSegmentLengths">
     ///     When true, the scale factor is derived from the sum of the hip-to-knee
@@ -95,27 +79,26 @@ public class SpeedEstimator
     ///     distance. This is pose-independent and more robust on videos where the
     ///     leg is never fully extended.
     /// </param>
-    public SpeedEstimationResult Estimate(List<PoseFrame> frames, double? hipHeightMeters = null,
-        bool useSegmentLengths = true, double aspectRatio = 1.0)
+    public SpeedEstimationResult Estimate(List<SideViewFrame> projected, double? hipHeightMeters = null,
+        YawCorrectionMethod methodUsed = YawCorrectionMethod.Median, bool useSegmentLengths = true)
     {
-        var projected      = _projector.Project(frames, aspectRatio);
-        var velocities     = _velocityAnalyzer.Compute(projected);
-        var speed          = _speedEstimator.EstimateSpeed(projected, velocities);
-        var speedPerFrame  = _speedEstimator.EstimateSpeedPerFrame(projected, velocities);
-        var scaleFactor    = hipHeightMeters.HasValue
-                                 ? (useSegmentLengths
-                                     ? ComputeScaleFactorFromSegments(projected, hipHeightMeters.Value)
-                                     : ComputeScaleFactor(projected, hipHeightMeters.Value))
-                                 : null;
+        var velocities    = _velocityAnalyzer.Compute(projected);
+        var speed         = _speedEstimator.EstimateSpeed(projected, velocities);
+        var speedPerFrame = _speedEstimator.EstimateSpeedPerFrame(projected, velocities);
+        var scaleFactor   = hipHeightMeters.HasValue
+                                ? (useSegmentLengths
+                                    ? ComputeScaleFactorFromSegments(projected, hipHeightMeters.Value)
+                                    : ComputeScaleFactor(projected, hipHeightMeters.Value))
+                                : null;
 
         return new SpeedEstimationResult
         {
-            Speed            = speed,
-            SpeedPerFrame    = speedPerFrame,
-            YawCorrectionMethod = _projector.MethodUsed,
-            ProjectedFrames  = projected,
-            Velocities       = velocities,
-            ScaleFactor      = scaleFactor
+            Speed               = speed,
+            SpeedPerFrame       = speedPerFrame,
+            YawCorrectionMethod = methodUsed,
+            ProjectedFrames     = projected,
+            Velocities          = velocities,
+            ScaleFactor         = scaleFactor,
         };
     }
 

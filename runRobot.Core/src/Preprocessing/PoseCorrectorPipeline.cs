@@ -32,14 +32,27 @@ public class PoseCorrectorPipeline
     }
 
     /// <summary>
-    /// Applies the configured preprocessing steps, then projects to 2D by dropping Z.
+    /// Applies the configured corrector steps to raw pose frames.
+    /// The returned frames are in world-space coordinates if
+    /// <see cref="PoseCorrectorStep.PerspectiveCorrection"/> is active.
+    /// Pass the result to <see cref="Project"/> to obtain 2D side-view frames.
+    /// </summary>
+    public List<PoseFrame> Correct(List<PoseFrame> frames, double aspectRatio = 1.0)
+    {
+        var result = frames;
+        foreach (var step in PoseCorrectorFactory.Order.Where(_steps.Contains))
+            result = PoseCorrectorFactory.GetCorrector(step, result, aspectRatio).CorrectAll(result);
+        return result;
+    }
+
+    /// <summary>
+    /// Applies aspect-ratio scaling and yaw correction to corrected pose frames,
+    /// then projects them into 2D <see cref="SideViewFrame"/>s.
     /// Call <see cref="MethodUsed"/> afterwards to confirm the yaw strategy used.
     /// </summary>
-    public List<SideViewFrame> Project(List<PoseFrame> frames, double aspectRatio = 1.0)
+    public List<SideViewFrame> Project(List<PoseFrame> corrected, double aspectRatio = 1.0)
     {
-        var worldFrames = frames;
-        foreach (var step in PoseCorrectorFactory.Order.Where(_steps.Contains))
-            worldFrames = PoseCorrectorFactory.GetCorrector(step, worldFrames, aspectRatio).CorrectAll(worldFrames);
+        var worldFrames = corrected;
 
         if (aspectRatio != 1.0)
             worldFrames = [.. worldFrames.Select(frame =>
@@ -53,14 +66,14 @@ public class PoseCorrectorPipeline
             })];
 
         MethodUsed = _method;
-        var corrected = _method switch
+        var yawCorrected = _method switch
         {
             YawCorrectionMethod.NoYaw    => worldFrames,
             YawCorrectionMethod.PerFrame => new YawCorrector().CorrectAllPerFrame(worldFrames),
             _                            => YawCorrector.EstimateFrom(worldFrames).CorrectAll(worldFrames),
         };
 
-        return [.. corrected.Select(frame =>
+        return [.. yawCorrected.Select(frame =>
         {
             var sv = new SideViewFrame { Timestamp = frame.Timestamp, FrameNumber = frame.FrameNumber };
             sv.Landmarks.AddRange(frame.Landmarks.Select(lm => new Landmark2D { X = lm.X, Y = lm.Y, Visibility = lm.Visibility }));
