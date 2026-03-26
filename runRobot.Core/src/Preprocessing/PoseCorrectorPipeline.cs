@@ -22,13 +22,10 @@ public class PoseCorrectorPipeline
 
     public YawCorrectionMethod MethodUsed { get; private set; }
 
-    public PoseCorrectorPipeline(YawCorrectionMethod method = YawCorrectionMethod.Median,
-                        IEnumerable<PoseCorrectorStep>? steps = null)
+    public PoseCorrectorPipeline(SettingsPreset settings)
     {
-        _method = method;
-        _steps  = steps is not null
-            ? new HashSet<PoseCorrectorStep>(steps)
-            : [PoseCorrectorStep.VisibilityInterpolation, PoseCorrectorStep.TemporalSmoothing, PoseCorrectorStep.PerspectiveCorrection];
+        _method = settings.YawCorrectionMethod;
+        _steps  = new HashSet<PoseCorrectorStep>(settings.PoseCorrectorSteps);
     }
 
     /// <summary>

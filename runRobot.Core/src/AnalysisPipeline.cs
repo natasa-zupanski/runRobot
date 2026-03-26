@@ -66,7 +66,7 @@ public class AnalysisPipeline(string scriptPath)
         // ── Stage 2: pose correction ───────────────────────────────────────────
 
         progress?.Report("Correcting pose…");
-        var pipeline        = new PoseCorrectorPipeline(settings.YawCorrectionMethod, settings.PoseCorrectorSteps);
+        var pipeline        = new PoseCorrectorPipeline(settings);
         var correctedFrames = await Task.Run(() => pipeline.Correct(poseFrames, aspectRatio));
 
         // ── Stage 3: step count (on corrected frames) ──────────────────────────

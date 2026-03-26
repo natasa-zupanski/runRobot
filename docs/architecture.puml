@@ -456,6 +456,7 @@ GaitVelocityAnalyzer ..> SideViewFrame : consumes
 
 SettingsPreset "1" *-- "*" PoseCorrectorStep
 PresetPanel ..> PoseCorrectorFactory : uses
+PoseCorrectorPipeline ..> SettingsPreset : reads
 SpeedEstimationResult ..> YawCorrectionMethod
 
 @enduml

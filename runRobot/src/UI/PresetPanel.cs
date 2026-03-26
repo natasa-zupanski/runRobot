@@ -47,7 +47,7 @@ public class PresetPanel : UserControl
         MaxFrames           = MaxFrames,
         StepThreshold       = StepThreshold,
         StanceTolerance     = StanceTolerance * 100,
-        YawCorrectionMethod = YawMethod.ToString(),
+        YawCorrectionMethod = YawMethod,
         PoseCorrectorSteps  = _correctorBoxes
             .Where(kv => kv.Value.Checked)
             .Select(kv => kv.Key)
@@ -162,9 +162,9 @@ public class PresetPanel : UserControl
         _stanceToleranceBox.Text = preset.StanceTolerance.ToString();
         _yawMethodCombo.SelectedIndex = preset.YawCorrectionMethod switch
         {
-            "PerFrame" => 1,
-            "NoYaw"    => 2,
-            _          => 0,
+            YawCorrectionMethod.PerFrame => 1,
+            YawCorrectionMethod.NoYaw    => 2,
+            _                            => 0,
         };
         foreach (var (step, box) in _correctorBoxes)
             box.Checked = preset.PoseCorrectorSteps.Contains(step);
