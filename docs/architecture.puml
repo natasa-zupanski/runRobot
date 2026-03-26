@@ -345,19 +345,11 @@ package "runRobot.UI" #FFFEF0 {
 
   class PoseVisualizer <<static>> {
     +{static} DrawFrame(frame) : Bitmap
-    +{static} VisualizeFrames(frames, steps, result, maxFrames)
-  }
-
-  class VisualizationForm {
-    -_frameView : FrameViewPanel
-    #OnFormClosed(e)
   }
 
   MainWindow *-- "1" ProfilePanel
   MainWindow *-- "1" PresetPanel
   MainWindow *-- "1" FrameViewPanel
-  VisualizationForm *-- "1" FrameViewPanel
-  PoseVisualizer ..> VisualizationForm : creates
 
   ProfilePanel ..> AppDataStore : uses
   ProfilePanel ..> UserProfile : manages

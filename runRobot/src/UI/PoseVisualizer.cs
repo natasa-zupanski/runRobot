@@ -1,9 +1,8 @@
-using runRobot.Estimators;
 using runRobot.Models;
 
 namespace runRobot.UI;
 
-public class PoseVisualizer
+public static class PoseVisualizer
 {
     private static readonly (int, int)[] SkeletonConnections =
     [
@@ -29,24 +28,6 @@ public class PoseVisualizer
         (23, 25), (25, 27), (27, 29), (29, 31), // Left leg
         (24, 26), (26, 28), (28, 30), (30, 32), // Right leg
     ];
-
-    public static void VisualizeFrames(List<PoseFrame> frames, int estimatedSteps,
-        SpeedEstimationResult? speedResult = null, int? maxFrames = null)
-    {
-        int numFrames = maxFrames.HasValue ? Math.Min(frames.Count, maxFrames.Value) : frames.Count;
-        var bitmaps = new List<Bitmap>();
-
-        for (int i = 0; i < numFrames; i++)
-        {
-            bitmaps.Add(DrawFrame(frames[i]));
-            if ((i + 1) % 10 == 0)
-                Console.WriteLine($"Processed {i + 1}/{numFrames} frames");
-        }
-
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new VisualizationForm(bitmaps, estimatedSteps, speedResult));
-    }
 
     public static Bitmap DrawFrame(PoseFrame frame)
     {
@@ -96,28 +77,5 @@ public class PoseVisualizer
             graphics.DrawString($"Frame {frame.FrameNumber}", font, brush, 10, 10);
 
         return bitmap;
-    }
-}
-
-public class VisualizationForm : Form
-{
-    private readonly FrameViewPanel _frameView;
-
-    public VisualizationForm(List<Bitmap> bitmaps, int estimatedSteps, SpeedEstimationResult? speedResult = null)
-    {
-        Text          = "Pose Visualizations";
-        Size          = new Size(900, 700);
-        StartPosition = FormStartPosition.CenterScreen;
-
-        _frameView = new FrameViewPanel();
-        Controls.Add(_frameView);
-
-        _frameView.LoadFrames(bitmaps, estimatedSteps, speedResult);
-    }
-
-    protected override void OnFormClosed(FormClosedEventArgs e)
-    {
-        base.OnFormClosed(e);
-        Application.Exit();
     }
 }
