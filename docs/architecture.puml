@@ -53,7 +53,7 @@ package "runRobot.Models" #EEF6FF {
     +MaxFrames : int?
     +StepThreshold : double
     +StanceTolerance : double
-    +YawCorrectionMethod : string
+    +YawCorrectionMethod : YawCorrectionMethod
     +PoseCorrectorSteps : List<PoseCorrectorStep>
     +DebugSteps : bool
   }
@@ -455,6 +455,7 @@ StepEstimator ..> PoseFrame : consumes
 GaitVelocityAnalyzer ..> SideViewFrame : consumes
 
 SettingsPreset "1" *-- "*" PoseCorrectorStep
+SettingsPreset --> YawCorrectionMethod
 PresetPanel ..> PoseCorrectorFactory : uses
 PoseCorrectorPipeline ..> SettingsPreset : reads
 SpeedEstimationResult ..> YawCorrectionMethod
