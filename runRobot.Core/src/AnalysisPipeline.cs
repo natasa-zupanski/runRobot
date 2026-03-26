@@ -81,12 +81,7 @@ public class AnalysisPipeline(string scriptPath)
 
         progress?.Report("Estimating speed…");
         var speedResult = await Task.Run(() =>
-            new SpeedEstimator(
-                    yawMethod,
-                    stanceTolerance,
-                    settings.PerspectiveCorrection,
-                    settings.TemporalSmoothing,
-                    settings.VisibilityInterpolation)
+            new SpeedEstimator(yawMethod, stanceTolerance, settings.PoseCorrectorSteps)
                 .Estimate(poseFrames, hipHeightMeters, aspectRatio: aspectRatio));
 
         // ── Stage 4: calorie estimate (requires weight) ────────────────────────

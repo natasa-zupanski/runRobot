@@ -54,9 +54,7 @@ package "runRobot.Models" #EEF6FF {
     +StepThreshold : double
     +StanceTolerance : double
     +YawCorrectionMethod : string
-    +PerspectiveCorrection : bool
-    +TemporalSmoothing : bool
-    +VisibilityInterpolation : bool
+    +PoseCorrectorSteps : List<PoseCorrectorStep>
     +DebugSteps : bool
   }
 
@@ -73,6 +71,18 @@ package "runRobot.Preprocessing" #FFF8EE {
     NoYaw
     PerFrame
     Median
+  }
+
+  enum PoseCorrectorStep {
+    VisibilityInterpolation
+    TemporalSmoothing
+    PerspectiveCorrection
+  }
+
+  class PoseCorrectorFactory <<static>> {
+    +{static} Order : IReadOnlyList<PoseCorrectorStep>
+    +{static} GetLabel(step) : string
+    +{static} GetCorrector(step, frames, aspectRatio) : PoseCorrector
   }
 
   abstract class PoseCorrector {
@@ -114,7 +124,7 @@ package "runRobot.Preprocessing" #FFF8EE {
     +CorrectAll(frames) : List<PoseFrame>
   }
 
-  class PreProcessor {
+  class PoseCorrectorPipeline {
     +MethodUsed : YawCorrectionMethod
     +Project(frames, aspectRatio) : List<SideViewFrame>
   }
@@ -125,11 +135,10 @@ package "runRobot.Preprocessing" #FFF8EE {
   FramewiseCorrector <|-- PerspectiveDistortionCorrector
   FramewiseCorrector <|-- YawCorrector
 
-  PreProcessor ..> VisibilityInterpolator : uses
-  PreProcessor ..> TemporalSmoothingCorrector : uses
-  PreProcessor ..> PerspectiveDistortionCorrector : uses
-  PreProcessor ..> YawCorrector : uses
-  PreProcessor ..> YawCorrectionMethod : uses
+  PoseCorrectorPipeline ..> PoseCorrectorFactory : uses
+  PoseCorrectorPipeline ..> YawCorrector : uses
+  PoseCorrectorPipeline ..> YawCorrectionMethod : uses
+  PoseCorrectorFactory ..> PoseCorrector : produces
   YawCorrector ..> YawCorrectionMethod : uses
 }
 
@@ -205,7 +214,7 @@ package "runRobot.Core" #FFF0F5 {
   }
 
   class SpeedEstimator {
-    -_projector : PreProcessor
+    -_projector : PoseCorrectorPipeline
     -_velocityAnalyzer : GaitVelocityAnalyzer
     -_speedEstimator : TreadmillSpeedEstimator
     +Estimate(frames, hipHeightMeters, aspectRatio) : SpeedEstimationResult
@@ -238,7 +247,7 @@ package "runRobot.Core" #FFF0F5 {
     +RunAsync(videoPath, aspectRatio, settings, profile, progress) : Task<AnalysisResult>
   }
 
-  SpeedEstimator *-- "1" PreProcessor
+  SpeedEstimator *-- "1" PoseCorrectorPipeline
   SpeedEstimator *-- "1" GaitVelocityAnalyzer
   SpeedEstimator *-- "1" TreadmillSpeedEstimator
   SpeedEstimator ..> SpeedEstimationResult : produces
@@ -312,14 +321,8 @@ package "runRobot.UI" #FFFEF0 {
     -_combo : ComboBox
     -_saveBtn : Button
     -_delBtn : Button
+    -_correctorBoxes : Dictionary<PoseCorrectorStep, CheckBox>
     +MinimumWidth : int
-    +MaxFrames : int?
-    +StepThreshold : double
-    +StanceTolerance : double
-    +YawMethod : YawCorrectionMethod
-    +PerspectiveCorrection : bool
-    +TemporalSmoothing : bool
-    +VisibilityInterpolation : bool
     +CurrentSettings : SettingsPreset
     -_presets : List<SettingsPreset>
     -Apply(preset)
@@ -455,8 +458,11 @@ MainWindow ..> AnalysisResult : reads
 AnalyzeEndpoints ..> AnalysisPipeline : calls
 PoseAnalyzer ..> PoseFrame : produces
 SpeedEstimator ..> PoseFrame : consumes
-SpeedEstimator ..> SideViewFrame : produces (via PreProcessor)
+SpeedEstimator ..> SideViewFrame : produces (via PoseCorrectorPipeline)
 StepEstimator ..> PoseFrame : consumes
 GaitVelocityAnalyzer ..> SideViewFrame : consumes
+
+SettingsPreset "1" *-- "*" PoseCorrectorStep
+PresetPanel ..> PoseCorrectorFactory : uses
 
 @enduml

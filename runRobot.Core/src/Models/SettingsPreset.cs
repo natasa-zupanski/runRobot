@@ -1,3 +1,5 @@
+using runRobot.Preprocessing;
+
 namespace runRobot.Models;
 
 public class SettingsPreset
@@ -7,8 +9,6 @@ public class SettingsPreset
     public double StepThreshold { get; set; } = 0;
     public double StanceTolerance { get; set; } = 5;  // stored as % (e.g. 5 means 5%)
     public string YawCorrectionMethod { get; set; } = "Median";
-    public bool PerspectiveCorrection { get; set; } = true;
-    public bool TemporalSmoothing { get; set; } = true;
-    public bool VisibilityInterpolation { get; set; } = true;
+    public List<PoseCorrectorStep> PoseCorrectorSteps { get; set; } = [.. PoseCorrectorFactory.Order];
     public bool DebugSteps { get; set; } = false;
 }

@@ -36,7 +36,7 @@ public class SpeedEstimationResult
 /// End-to-end pipeline that takes raw PoseFrames and returns an estimated speed.
 ///
 /// Stages:
-///   1. PreProcessor   — projects 3D landmarks into 2D world-space coordinates
+///   1. PoseCorrectorPipeline   — projects 3D landmarks into 2D world-space coordinates
 ///   2. GaitVelocityAnalyzer — computes per-landmark velocities across the sequence
 ///   3. TreadmillSpeedEstimator — derives belt speed from foot velocity during stance
 ///
@@ -45,7 +45,7 @@ public class SpeedEstimationResult
 /// </summary>
 public class SpeedEstimator
 {
-    private readonly PreProcessor _projector;
+    private readonly PoseCorrectorPipeline _projector;
     private readonly GaitVelocityAnalyzer _velocityAnalyzer;
     private readonly TreadmillSpeedEstimator _speedEstimator;
 
@@ -57,9 +57,11 @@ public class SpeedEstimator
     ///     global yaw from all frames. PerFrame estimates yaw independently per
     ///     frame. NoYaw skips yaw correction entirely.
     /// </param>
-    public SpeedEstimator(YawCorrectionMethod projectionMethod = YawCorrectionMethod.Median, double stanceHeightTolerance = 0.05, bool usePerspectiveCorrection = true, bool useTemporalSmoothing = true, bool useVisibilityInterpolation = true)
+    public SpeedEstimator(YawCorrectionMethod projectionMethod = YawCorrectionMethod.Median,
+                          double stanceHeightTolerance = 0.05,
+                          IEnumerable<PoseCorrectorStep>? steps = null)
         : this(
-            new PreProcessor(projectionMethod, usePerspectiveCorrection, useTemporalSmoothing, useVisibilityInterpolation),
+            new PoseCorrectorPipeline(projectionMethod, steps),
             new GaitVelocityAnalyzer(),
             new TreadmillSpeedEstimator { StanceYTolerance = stanceHeightTolerance })
     { }
@@ -69,7 +71,7 @@ public class SpeedEstimator
     /// Use this constructor to tune individual stage parameters.
     /// </summary>
     public SpeedEstimator(
-        PreProcessor projector,
+        PoseCorrectorPipeline projector,
         GaitVelocityAnalyzer velocityAnalyzer,
         TreadmillSpeedEstimator speedEstimator)
     {

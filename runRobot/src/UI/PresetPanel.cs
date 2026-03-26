@@ -25,39 +25,34 @@ public class PresetPanel : UserControl
     private readonly TextBox  _stanceToleranceBox;
     private readonly CheckBox _debugStepsBox;
     private readonly ComboBox _yawMethodCombo;
-    private readonly CheckBox _perspectiveCorrectionBox;
-    private readonly CheckBox _temporalSmoothingBox;
-    private readonly CheckBox _visibilityInterpolationBox;
+    private readonly Dictionary<PoseCorrectorStep, CheckBox> _correctorBoxes = [];
 
     private List<SettingsPreset> _presets = [];
 
-    // --- Properties read by MainWindow on Run ---
+    // --- Properties used by CurrentSettings ---
 
-    public int?   MaxFrames      => int.TryParse(_maxFramesBox.Text, out int mf) && mf > 0 ? mf : null;
-    public double StepThreshold  => double.TryParse(_stepThresholdBox.Text,  out double th) ? th : 0;
-    public double StanceTolerance => (double.TryParse(_stanceToleranceBox.Text, out double st) ? st : 5.0) / 100.0;
-    public YawCorrectionMethod YawMethod => _yawMethodCombo.SelectedIndex switch
+    private int?   MaxFrames      => int.TryParse(_maxFramesBox.Text, out int mf) && mf > 0 ? mf : null;
+    private double StepThreshold  => double.TryParse(_stepThresholdBox.Text,  out double th) ? th : 0;
+    private double StanceTolerance => (double.TryParse(_stanceToleranceBox.Text, out double st) ? st : 5.0) / 100.0;
+    private YawCorrectionMethod YawMethod => _yawMethodCombo.SelectedIndex switch
     {
         1 => YawCorrectionMethod.PerFrame,
         2 => YawCorrectionMethod.NoYaw,
         _ => YawCorrectionMethod.Median,
     };
 
-    public bool PerspectiveCorrection   => _perspectiveCorrectionBox.Checked;
-    public bool TemporalSmoothing       => _temporalSmoothingBox.Checked;
-    public bool VisibilityInterpolation => _visibilityInterpolationBox.Checked;
-
     /// <summary>Snapshot of current UI state as a SettingsPreset (Name left empty).</summary>
     public SettingsPreset CurrentSettings => new()
     {
-        MaxFrames               = MaxFrames,
-        StepThreshold           = StepThreshold,
-        StanceTolerance         = StanceTolerance * 100,
-        YawCorrectionMethod     = YawMethod.ToString(),
-        PerspectiveCorrection   = PerspectiveCorrection,
-        TemporalSmoothing       = TemporalSmoothing,
-        VisibilityInterpolation = VisibilityInterpolation,
-        DebugSteps              = _debugStepsBox.Checked,
+        MaxFrames           = MaxFrames,
+        StepThreshold       = StepThreshold,
+        StanceTolerance     = StanceTolerance * 100,
+        YawCorrectionMethod = YawMethod.ToString(),
+        PoseCorrectorSteps  = _correctorBoxes
+            .Where(kv => kv.Value.Checked)
+            .Select(kv => kv.Key)
+            .ToList(),
+        DebugSteps          = _debugStepsBox.Checked,
     };
 
     public PresetPanel()
@@ -125,20 +120,16 @@ public class PresetPanel : UserControl
         _yawMethodCombo.SelectedIndex = 0;
         table.Controls.Add(_yawMethodCombo, 1, 7);
 
-        // Row 8: perspective correction (full width)
-        _perspectiveCorrectionBox = new CheckBox { Text = "Perspective correction", AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
-        table.Controls.Add(_perspectiveCorrectionBox, 0, 8);
-        table.SetColumnSpan(_perspectiveCorrectionBox, 2);
-
-        // Row 9: temporal smoothing (full width)
-        _temporalSmoothingBox = new CheckBox { Text = "Temporal smoothing", AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
-        table.Controls.Add(_temporalSmoothingBox, 0, 9);
-        table.SetColumnSpan(_temporalSmoothingBox, 2);
-
-        // Row 10: visibility interpolation (full width)
-        _visibilityInterpolationBox = new CheckBox { Text = "Visibility interpolation", AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
-        table.Controls.Add(_visibilityInterpolationBox, 0, 10);
-        table.SetColumnSpan(_visibilityInterpolationBox, 2);
+        // Rows 8+: one checkbox per PoseCorrectorStep, in pipeline application order
+        int stepRow = 8;
+        foreach (var step in PoseCorrectorFactory.Order)
+        {
+            var box = new CheckBox { Text = PoseCorrectorFactory.GetLabel(step), AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
+            _correctorBoxes[step] = box;
+            table.Controls.Add(box, 0, stepRow);
+            table.SetColumnSpan(box, 2);
+            stepRow++;
+        }
 
         Controls.Add(table);
     }
@@ -169,11 +160,14 @@ public class PresetPanel : UserControl
         _maxFramesBox.Text       = preset.MaxFrames?.ToString() ?? "";
         _stepThresholdBox.Text   = preset.StepThreshold.ToString();
         _stanceToleranceBox.Text = preset.StanceTolerance.ToString();
-        int idx = _yawMethodCombo.Items.IndexOf(preset.YawCorrectionMethod);
-        if (idx >= 0) _yawMethodCombo.SelectedIndex = idx;
-        _perspectiveCorrectionBox.Checked   = preset.PerspectiveCorrection;
-        _temporalSmoothingBox.Checked       = preset.TemporalSmoothing;
-        _visibilityInterpolationBox.Checked = preset.VisibilityInterpolation;
+        _yawMethodCombo.SelectedIndex = preset.YawCorrectionMethod switch
+        {
+            "PerFrame" => 1,
+            "NoYaw"    => 2,
+            _          => 0,
+        };
+        foreach (var (step, box) in _correctorBoxes)
+            box.Checked = preset.PoseCorrectorSteps.Contains(step);
         _debugStepsBox.Checked              = preset.DebugSteps;
     }
 
@@ -186,18 +180,8 @@ public class PresetPanel : UserControl
             if (string.IsNullOrEmpty(name)) return;
         }
 
-        var preset = new SettingsPreset
-        {
-            Name                    = name,
-            MaxFrames               = MaxFrames,
-            StepThreshold           = StepThreshold,
-            StanceTolerance         = double.TryParse(_stanceToleranceBox.Text, out double st) ? st : 5,
-            YawCorrectionMethod     = _yawMethodCombo.SelectedItem?.ToString() ?? "Median",
-            PerspectiveCorrection   = PerspectiveCorrection,
-            TemporalSmoothing       = TemporalSmoothing,
-            VisibilityInterpolation = VisibilityInterpolation,
-            DebugSteps              = _debugStepsBox.Checked,
-        };
+        var preset = CurrentSettings;
+        preset.Name = name;
 
         int idx = _presets.FindIndex(p => p.Name == name);
         if (idx >= 0) _presets[idx] = preset;
