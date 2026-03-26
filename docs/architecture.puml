@@ -251,15 +251,14 @@ package "runRobot.Core" #FFF0F5 {
   SpeedEstimator *-- "1" GaitVelocityAnalyzer
   SpeedEstimator *-- "1" TreadmillSpeedEstimator
   SpeedEstimator ..> SpeedEstimationResult : produces
-  SpeedEstimationResult *-- "1" YawCorrectionMethod
 
   AnalysisPipeline ..> PoseAnalyzer : uses
   AnalysisPipeline ..> StepEstimator : uses
   AnalysisPipeline ..> SpeedEstimator : uses
   AnalysisPipeline ..> CalorieEstimator : uses
   AnalysisPipeline ..> AnalysisResult : produces
-  AnalysisResult *-- CalorieEstimationResult
-  AnalysisResult *-- SpeedEstimationResult
+  AnalysisResult o-- CalorieEstimationResult
+  AnalysisResult o-- SpeedEstimationResult
 }
 
 ' ─────────────────────────────────────────
@@ -439,12 +438,12 @@ package "runRobot.Api" #F0F8FF {
     +StepDebugLog : string?
   }
 
-  AnalysisJob *-- JobStatus
+  AnalysisJob --> JobStatus
   AnalysisJobStore "1" *-- "*" AnalysisJob
   AnalyzeEndpoints ..> AnalysisJobStore : uses
   AnalyzeEndpoints ..> AnalyzeRequest : reads
   AnalyzeEndpoints ..> JobStatusResponse : produces
-  JobStatusResponse *-- AnalyzeResultDto
+  JobStatusResponse o-- AnalyzeResultDto
   AnalyzeResultDto ..> AnalysisResult : maps from
 }
 
@@ -464,5 +463,6 @@ GaitVelocityAnalyzer ..> SideViewFrame : consumes
 
 SettingsPreset "1" *-- "*" PoseCorrectorStep
 PresetPanel ..> PoseCorrectorFactory : uses
+SpeedEstimationResult ..> YawCorrectionMethod
 
 @enduml
