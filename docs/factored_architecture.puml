@@ -1,0 +1,520 @@
+''
+'' highlevelarch.puml — runRobot multi-page architecture diagrams
+''
+'' Each @startuml…@enduml block is one page in the VS Code PlantUML preview.
+'' Pages:
+''   1. System Overview   — project-level components and dependencies
+''   2. Data Models       — runRobot.Models + runRobot.Storage
+''   3. Preprocessing     — runRobot.Preprocessing corrector hierarchy + pipeline
+''   4. Analysis Core     — runRobot.Core + runRobot.Speed estimators
+''   5. UI                — runRobot WinForms classes
+''   6. API               — runRobot.Api endpoints, jobs, DTOs
+''
+
+' ═══════════════════════════════════════════════════════════════════
+' 1. SYSTEM OVERVIEW
+' ═══════════════════════════════════════════════════════════════════
+@startuml 1 - System Overview
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+
+component "runRobot\n(WinForms GUI)" as UI #FFFEF0
+component "runRobot.Api\n(ASP.NET Core)" as Api #F0F8FF
+component "runRobot.Core\n(Class Library)" as Core #FFF0F5
+component "runRobot.Api.Tests\n(xUnit)" as Tests #F5F5F5
+
+database "%APPDATA%\\runRobot\\\nprofiles.json / presets.json" as AppData #F5F0FF
+collections "Python subprocess\n(MediaPipe Pose)" as Python #EEFFEE
+
+UI    --> Core    : references
+Api   --> Core    : references
+Tests --> Api     : WebApplicationFactory
+
+Core  --> Python  : spawns pose_analyzer.py
+UI    --> AppData : AppDataStore (profiles, presets)
+Api   --> AppData : AppDataStore (profiles, presets)
+@enduml
+
+' ═══════════════════════════════════════════════════════════════════
+' 2. DATA MODELS
+' ═══════════════════════════════════════════════════════════════════
+@startuml 2 - Data Models
+skinparam classAttributeIconSize 0
+skinparam groupInheritance 2
+skinparam linetype ortho
+hide empty members
+
+package "runRobot.Models" #EEF6FF {
+
+  class Landmark {
+    +X : double
+    +Y : double
+    +Z : double
+    +Visibility : double
+    +ToString() : string
+  }
+
+  class PoseFrame {
+    +Timestamp : int
+    +FrameNumber : int
+    +Landmarks : List<Landmark>
+    +{static} LandmarkNames : string[]
+    +GetLandmarkByName(name) : Landmark?
+    +PrintLandmarks()
+  }
+
+  class Landmark2D {
+    +X : double
+    +Y : double
+    +Visibility : double
+    +ToString() : string
+  }
+
+  class SideViewFrame {
+    +Timestamp : int
+    +FrameNumber : int
+    +Landmarks : List<Landmark2D>
+  }
+
+  class UserProfile {
+    +Name : string
+    +HipHeight : double?
+    +HipHeightUnit : string
+    +Weight : double?
+    +WeightUnit : string
+  }
+
+  class SettingsPreset {
+    +Name : string
+    +MaxFrames : int?
+    +StepThreshold : double
+    +StanceTolerance : double
+    +YawCorrectionMethod : YawCorrectionMethod
+    +PoseCorrectorSteps : List<PoseCorrectorStep>
+    +DebugSteps : bool
+  }
+
+  PoseFrame     "1" *-- "33" Landmark
+  SideViewFrame "1" *-- "33" Landmark2D
+}
+
+package "runRobot.Storage" #F5F0FF {
+
+  class AppDataStore <<static>> {
+    +{static} DataDirectory : string
+    +{static} LoadProfiles() : List<UserProfile>
+    +{static} SaveProfiles(profiles)
+    +{static} LoadPresets() : List<SettingsPreset>
+    +{static} SavePresets(presets)
+  }
+
+  AppDataStore ..> UserProfile    : serialises
+  AppDataStore ..> SettingsPreset : serialises
+}
+@enduml
+
+' ═══════════════════════════════════════════════════════════════════
+' 3. PREPROCESSING PIPELINE
+' ═══════════════════════════════════════════════════════════════════
+@startuml 3 - Preprocessing Pipeline
+skinparam classAttributeIconSize 0
+skinparam groupInheritance 2
+skinparam linetype ortho
+hide empty members
+
+package "runRobot.Preprocessing" #FFF8EE {
+
+  enum YawCorrectionMethod {
+    NoYaw
+    PerFrame
+    Median
+  }
+
+  enum PoseCorrectorStep {
+    VisibilityInterpolation
+    TemporalSmoothing
+    PerspectiveCorrection
+  }
+
+  class PoseCorrectorFactory <<static>> {
+    +{static} Order : IReadOnlyList<PoseCorrectorStep>
+    +{static} GetLabel(step) : string
+    +{static} GetCorrector(step, frames, aspectRatio) : PoseCorrector
+  }
+
+  abstract class PoseCorrector {
+    +{abstract} CorrectAll(frames) : List<PoseFrame>
+  }
+
+  abstract class FramewiseCorrector {
+    #LeftHipIndex : int = 23
+    #RightHipIndex : int = 24
+    #MinVisibility : double = 0.5
+    +{abstract} Correct(frame) : PoseFrame
+    +CorrectAll(frames) : List<PoseFrame>
+  }
+
+  class PerspectiveDistortionCorrector {
+    +FocalLength : double
+    +HipDepth : double
+    +{static} CalibrateFrom(frames, aspectRatio) : PDC
+    +Correct(frame) : PoseFrame
+    -Calibrate(frames, aspectRatio) : (focal, depth)
+    -ComputeCost(...) : double
+  }
+
+  class YawCorrector {
+    +YawAngleRadians : double
+    +{static} EstimateFrom(frames) : YawCorrector
+    +Correct(frame) : PoseFrame
+    +CorrectAllPerFrame(frames) : List<PoseFrame>
+    +{static} EstimateYawPerFrame(frames) : List<double?>
+  }
+
+  class TemporalSmoothingCorrector {
+    -_sigma : double
+    +CorrectAll(frames) : List<PoseFrame>
+  }
+
+  class VisibilityInterpolator {
+    -_minVisibility : double
+    +CorrectAll(frames) : List<PoseFrame>
+  }
+
+  class PoseCorrectorPipeline {
+    +MethodUsed : YawCorrectionMethod
+    +Correct(frames, aspectRatio) : List<PoseFrame>
+    +Project(corrected, aspectRatio) : List<SideViewFrame>
+  }
+
+  PoseCorrector         <|-- FramewiseCorrector
+  PoseCorrector         <|-- TemporalSmoothingCorrector
+  PoseCorrector         <|-- VisibilityInterpolator
+  FramewiseCorrector    <|-- PerspectiveDistortionCorrector
+  FramewiseCorrector    <|-- YawCorrector
+
+  PoseCorrectorPipeline ..> PoseCorrectorFactory  : uses
+  PoseCorrectorPipeline ..> YawCorrector          : uses
+  PoseCorrectorPipeline ..> YawCorrectionMethod   : uses
+  PoseCorrectorPipeline ..> SettingsPreset        : reads
+  PoseCorrectorFactory  ..> PoseCorrector         : produces
+  YawCorrector          ..> YawCorrectionMethod   : uses
+
+  SettingsPreset "1" *-- "*" PoseCorrectorStep
+  SettingsPreset --> YawCorrectionMethod
+}
+@enduml
+
+' ═══════════════════════════════════════════════════════════════════
+' 4. ANALYSIS CORE
+' ═══════════════════════════════════════════════════════════════════
+@startuml 4 - Analysis Core
+skinparam classAttributeIconSize 0
+skinparam groupInheritance 2
+skinparam linetype ortho
+hide empty members
+
+package "runRobot.Speed" #F0FFF0 {
+
+  class LandmarkVelocity {
+    +Vx : double
+    +Vy : double
+    +Speed : double
+  }
+
+  class FrameVelocity {
+    +FrameNumber : int
+    +TimestampSeconds : double
+    +Landmarks : List<LandmarkVelocity>
+    +LeftHeel : LandmarkVelocity?
+    +RightHeel : LandmarkVelocity?
+    +LeftAnkle : LandmarkVelocity?
+    +RightAnkle : LandmarkVelocity?
+  }
+
+  class GaitVelocityAnalyzer {
+    +Compute(frames) : List<FrameVelocity>
+    +GetLandmarkSpeed(frames, index) : List<double>
+    +GetFootSpeed(frames, leftFoot) : List<double>
+  }
+
+  class TreadmillSpeedEstimator {
+    +StanceYTolerance : double
+    +EstimateSpeed(frames, velocities) : double
+    +EstimateSpeedPerFrame(frames, velocities) : List<double?>
+    +GetStancePhase(frames, leftFoot) : List<bool>
+    -GetStanceVelocities(...) : List<double>
+    -Median(values) : double
+  }
+
+  FrameVelocity          "1" *-- "33" LandmarkVelocity
+  GaitVelocityAnalyzer   ..>  FrameVelocity : produces
+  TreadmillSpeedEstimator ..> FrameVelocity : consumes
+}
+
+package "runRobot.Core" #FFF0F5 {
+
+  class PoseAnalyzer {
+    -_pythonScriptPath : string
+    -_verbose : bool
+    +AnalyzeVideoAsync(videoPath, maxFrames) : Task<List<PoseFrame>>
+    +PrintPoseSummary(frames)
+  }
+
+  note right of PoseAnalyzer
+    Spawns pose_analyzer.py
+    (lives in Core/src/scripts/)
+  end note
+
+  class StepEstimator {
+    +EstimateSteps(frames, debug, threshold, debugOutput) : int
+  }
+
+  class SpeedEstimationResult {
+    +Speed : double
+    +SpeedPerFrame : List<double?>
+    +YawCorrectionMethod : YawCorrectionMethod
+    +ProjectedFrames : List<SideViewFrame>
+    +Velocities : List<FrameVelocity>
+    +ScaleFactor : double?
+  }
+
+  class SpeedEstimator {
+    -_velocityAnalyzer : GaitVelocityAnalyzer
+    -_speedEstimator : TreadmillSpeedEstimator
+    +Estimate(projected, hipHeightMeters, methodUsed) : SpeedEstimationResult
+    -ComputeScaleFactorFromSegments(frames, hipHeight) : double?
+  }
+
+  class CalorieEstimator {
+    +{static} LoadFromAssets() : CalorieEstimator
+    +Estimate(speedResult, weightKg) : CalorieEstimationResult
+  }
+
+  class CalorieEstimationResult {
+    +Calories : double
+    +AverageMet : double
+    +DurationMinutes : double
+    +AverageSpeedMph : double
+    +RunningFraction : double
+  }
+
+  class AnalysisResult {
+    +PoseFrames : List<PoseFrame>
+    +EstimatedSteps : int
+    +SpeedResult : SpeedEstimationResult?
+    +CalorieResult : CalorieEstimationResult?
+    +StepDebugLog : string?
+  }
+
+  class AnalysisPipeline {
+    -_scriptPath : string
+    +RunAsync(videoPath, aspectRatio, settings, profile, progress) : Task<AnalysisResult>
+  }
+
+  SpeedEstimator  *--  "1" GaitVelocityAnalyzer
+  SpeedEstimator  *--  "1" TreadmillSpeedEstimator
+  SpeedEstimator  ..>  SpeedEstimationResult : produces
+
+  AnalysisPipeline ..> PoseAnalyzer          : uses
+  AnalysisPipeline ..> StepEstimator         : uses
+  AnalysisPipeline ..> PoseCorrectorPipeline : uses
+  AnalysisPipeline ..> SpeedEstimator        : uses
+  AnalysisPipeline ..> CalorieEstimator      : uses
+  AnalysisPipeline ..> AnalysisResult        : produces
+  AnalysisResult   o-- CalorieEstimationResult
+  AnalysisResult   o-- SpeedEstimationResult
+
+  PoseAnalyzer         ..> PoseFrame        : produces
+  SpeedEstimator       ..> SideViewFrame    : consumes
+  StepEstimator        ..> PoseFrame        : consumes
+  GaitVelocityAnalyzer ..> SideViewFrame    : consumes
+  SpeedEstimationResult ..> YawCorrectionMethod
+}
+@enduml
+
+' ═══════════════════════════════════════════════════════════════════
+' 5. UI
+' ═══════════════════════════════════════════════════════════════════
+@startuml 5 - UI
+skinparam classAttributeIconSize 0
+skinparam groupInheritance 2
+skinparam linetype ortho
+hide empty members
+
+package "runRobot.UI" #FFFEF0 {
+
+  class MainWindow {
+    -_split : SplitContainer
+    -_videoPathBox : TextBox
+    -_profilePanel : ProfilePanel
+    -_presetPanel : PresetPanel
+    -_runButton : Button
+    -_statusLabel : Label
+    -_frameView : FrameViewPanel
+    -_videoAspectRatio : double
+    #OnLoad()
+    -OnBrowse()
+    -OnRun()
+    -TryGetVideoAspectRatioAsync(path) : Task<double?>
+  }
+
+  class ProfilePanel {
+    -_combo : ComboBox
+    -_saveBtn : Button
+    -_delBtn : Button
+    -_hipHeightBox : TextBox
+    -_unitCombo : ComboBox
+    -_weightBox : TextBox
+    -_weightUnitCombo : ComboBox
+    +MinimumWidth : int
+    +CurrentProfile : UserProfile
+    -_profiles : List<UserProfile>
+    -Apply(profile)
+    -OnSave()
+    -OnDelete()
+  }
+
+  class PresetPanel {
+    -_combo : ComboBox
+    -_saveBtn : Button
+    -_delBtn : Button
+    -_correctorBoxes : Dictionary<PoseCorrectorStep, CheckBox>
+    +MinimumWidth : int
+    +CurrentSettings : SettingsPreset
+    -_presets : List<SettingsPreset>
+    -Apply(preset)
+    -OnSave()
+    -OnDelete()
+  }
+
+  class FrameViewPanel {
+    -_pictureBox : PictureBox
+    -_timer : Timer
+    -_bitmaps : List<Bitmap>
+    -_speedResult : SpeedEstimationResult?
+    -_lastKnownSpeed : double?
+    -_currentIndex : int
+    +LoadFrames(bitmaps, estimatedSteps, speedResult, calorieResult)
+    +ClearFrames()
+    -FormatSpeed(worldSpeed) : string
+    -ShowFrame(index)
+    #Dispose(disposing)
+  }
+
+  class PoseVisualizer <<static>> {
+    +{static} DrawFrame(frame) : Bitmap
+  }
+
+  class SideLabel {
+    +SideLabel(text, topMargin)
+  }
+
+  class PromptDialog <<static>> {
+    +{static} Show(message, owner) : string?
+  }
+
+  MainWindow *-- "1" ProfilePanel
+  MainWindow *-- "1" PresetPanel
+  MainWindow *-- "1" FrameViewPanel
+
+  MainWindow  ..> AnalysisPipeline : calls
+  MainWindow  ..> PoseVisualizer   : calls
+  MainWindow  ..> AnalysisResult   : reads
+
+  ProfilePanel ..> AppDataStore  : uses
+  ProfilePanel ..> UserProfile   : manages
+  ProfilePanel ..> PromptDialog  : uses
+
+  PresetPanel  ..> AppDataStore      : uses
+  PresetPanel  ..> SettingsPreset    : manages
+  PresetPanel  ..> PromptDialog      : uses
+  PresetPanel  ..> PoseCorrectorFactory : uses
+
+  FrameViewPanel ..> SpeedEstimationResult  : reads
+  FrameViewPanel ..> CalorieEstimationResult : reads
+}
+@enduml
+
+' ═══════════════════════════════════════════════════════════════════
+' 6. API
+' ═══════════════════════════════════════════════════════════════════
+@startuml 6 - API
+skinparam classAttributeIconSize 0
+skinparam groupInheritance 2
+skinparam linetype ortho
+hide empty members
+
+package "runRobot.Api" #F0F8FF {
+
+  class ApiKeyMiddleware {
+    +InvokeAsync(context) : Task
+    -ValidateKey(supplied) : bool
+  }
+
+  class AnalysisJob {
+    +JobId : Guid
+    +Status : JobStatus
+    +Progress : string
+    +CoreResult : AnalysisResult?
+    +Error : string?
+  }
+
+  enum JobStatus {
+    Queued
+    Running
+    Done
+    Failed
+  }
+
+  class AnalysisJobStore <<singleton>> {
+    -_jobs : ConcurrentDictionary<Guid, AnalysisJob>
+    +Create() : AnalysisJob
+    +Get(id) : AnalysisJob?
+  }
+
+  class AnalyzeEndpoints <<static>> {
+    +{static} Map(app)
+    ' POST /analyze → 202 + jobId
+    ' GET  /analyze/{jobId} → JobStatusResponse
+  }
+
+  class AnalyzeRequest {
+    +VideoPath : string
+    +AspectRatio : double
+    +Settings : SettingsPreset?
+    +Profile : UserProfile?
+  }
+
+  class JobStatusResponse {
+    +JobId : Guid
+    +Status : string
+    +Progress : string
+    +Result : AnalyzeResultDto?
+    +Error : string?
+  }
+
+  class AnalyzeResultDto {
+    +EstimatedSteps : int
+    +Speed : double?
+    +ScaleFactor : double?
+    +Calories : double?
+    +AverageMet : double?
+    +DurationMinutes : double?
+    +AverageSpeedMph : double?
+    +RunningFraction : double?
+    +SpeedPerFrame : List<double?>
+    +StepDebugLog : string?
+  }
+
+  AnalysisJob        --> JobStatus
+  AnalysisJobStore "1" *-- "*" AnalysisJob
+  AnalyzeEndpoints ..> AnalysisJobStore   : uses
+  AnalyzeEndpoints ..> AnalyzeRequest     : reads
+  AnalyzeEndpoints ..> JobStatusResponse  : produces
+  AnalyzeEndpoints ..> AnalysisPipeline   : calls
+  JobStatusResponse  o-- AnalyzeResultDto
+  AnalyzeResultDto   ..> AnalysisResult   : maps from
+}
+@enduml
