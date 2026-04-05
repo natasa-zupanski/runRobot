@@ -6,7 +6,7 @@ namespace runRobot.Preprocessing;
 /// Applies a configurable sequence of preprocessing corrections to raw PoseFrames,
 /// then projects them into 2D world-space SideViewFrames.
 ///
-/// The active steps are controlled by the <see cref="PoseCorrectorStep"/> values
+/// The active steps are controlled by the <see cref="PoseCorrectorType"/> values
 /// passed to the constructor. Steps always execute in this fixed order when enabled:
 ///
 ///   1. VisibilityInterpolation — fill low-visibility landmark gaps
@@ -18,20 +18,20 @@ namespace runRobot.Preprocessing;
 public class PoseCorrectorPipeline
 {
     private readonly YawCorrectionMethod _method;
-    private readonly HashSet<PoseCorrectorStep> _steps;
+    private readonly HashSet<PoseCorrectorType> _steps;
 
     public YawCorrectionMethod MethodUsed { get; private set; }
 
     public PoseCorrectorPipeline(SettingsPreset settings)
     {
         _method = settings.YawCorrectionMethod;
-        _steps  = new HashSet<PoseCorrectorStep>(settings.PoseCorrectorSteps);
+        _steps  = [.. settings.PoseCorrectorSteps];
     }
 
     /// <summary>
     /// Applies the configured corrector steps to raw pose frames.
     /// The returned frames are in world-space coordinates if
-    /// <see cref="PoseCorrectorStep.PerspectiveCorrection"/> is active.
+    /// <see cref="PoseCorrectorType.PerspectiveCorrection"/> is active.
     /// Pass the result to <see cref="Project"/> to obtain 2D side-view frames.
     /// </summary>
     public List<PoseFrame> Correct(List<PoseFrame> frames, double aspectRatio = 1.0)

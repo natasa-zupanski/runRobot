@@ -91,7 +91,7 @@ package "runRobot.Models" #EEF6FF {
     +StepThreshold : double
     +StanceTolerance : double
     +YawCorrectionMethod : YawCorrectionMethod
-    +PoseCorrectorSteps : List<PoseCorrectorStep>
+    +PoseCorrectorSteps : List<PoseCorrectorType>
     +DebugSteps : bool
   }
 
@@ -131,14 +131,14 @@ package "runRobot.Preprocessing" #FFF8EE {
     Median
   }
 
-  enum PoseCorrectorStep {
+  enum PoseCorrectorType {
     VisibilityInterpolation
     TemporalSmoothing
     PerspectiveCorrection
   }
 
   class PoseCorrectorFactory <<static>> {
-    +{static} Order : IReadOnlyList<PoseCorrectorStep>
+    +{static} Order : IReadOnlyList<PoseCorrectorType>
     +{static} GetLabel(step) : string
     +{static} GetCorrector(step, frames, aspectRatio) : PoseCorrector
   }
@@ -201,7 +201,7 @@ package "runRobot.Preprocessing" #FFF8EE {
   PoseCorrectorFactory  ..> PoseCorrector         : produces
   YawCorrector          ..> YawCorrectionMethod   : uses
 
-  SettingsPreset "1" *-- "*" PoseCorrectorStep
+  SettingsPreset "1" *-- "*" PoseCorrectorType
   SettingsPreset --> YawCorrectionMethod
 }
 @enduml
@@ -380,7 +380,7 @@ package "runRobot.UI" #FFFEF0 {
     -_combo : ComboBox
     -_saveBtn : Button
     -_delBtn : Button
-    -_correctorBoxes : Dictionary<PoseCorrectorStep, CheckBox>
+    -_correctorBoxes : Dictionary<PoseCorrectorType, CheckBox>
     +MinimumWidth : int
     +CurrentSettings : SettingsPreset
     -_presets : List<SettingsPreset>

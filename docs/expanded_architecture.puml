@@ -54,7 +54,7 @@ package "runRobot.Models" #EEF6FF {
     +StepThreshold : double
     +StanceTolerance : double
     +YawCorrectionMethod : YawCorrectionMethod
-    +PoseCorrectorSteps : List<PoseCorrectorStep>
+    +PoseCorrectorSteps : List<PoseCorrectorType>
     +DebugSteps : bool
   }
 

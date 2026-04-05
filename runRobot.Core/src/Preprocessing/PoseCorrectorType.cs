@@ -1,6 +1,6 @@
 namespace runRobot.Preprocessing;
 
-public enum PoseCorrectorStep
+public enum PoseCorrectorType
 {
     VisibilityInterpolation,
     TemporalSmoothing,

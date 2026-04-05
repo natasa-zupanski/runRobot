@@ -25,7 +25,7 @@ public class PresetPanel : UserControl
     private readonly TextBox  _stanceToleranceBox;
     private readonly CheckBox _debugStepsBox;
     private readonly ComboBox _yawMethodCombo;
-    private readonly Dictionary<PoseCorrectorStep, CheckBox> _correctorBoxes = [];
+    private readonly Dictionary<PoseCorrectorType, CheckBox> _correctorBoxes = [];
 
     private List<SettingsPreset> _presets = [];
 
@@ -120,7 +120,7 @@ public class PresetPanel : UserControl
         _yawMethodCombo.SelectedIndex = 0;
         table.Controls.Add(_yawMethodCombo, 1, 7);
 
-        // Rows 8+: one checkbox per PoseCorrectorStep, in pipeline application order
+        // Rows 8+: one checkbox per PoseCorrectorType, in pipeline application order
         int stepRow = 8;
         foreach (var step in PoseCorrectorFactory.Order)
         {
