@@ -19,6 +19,7 @@ public static class PoseCorrectorFactory
         PoseCorrectorType.VisibilityInterpolation,
         PoseCorrectorType.TemporalSmoothing,
         PoseCorrectorType.PerspectiveCorrection,
+        PoseCorrectorType.YawCorrection,
     ];
 
     private static readonly Dictionary<PoseCorrectorType, string> Labels = new()
@@ -26,15 +27,17 @@ public static class PoseCorrectorFactory
         [PoseCorrectorType.VisibilityInterpolation] = "Visibility interpolation",
         [PoseCorrectorType.TemporalSmoothing]       = "Temporal smoothing",
         [PoseCorrectorType.PerspectiveCorrection]   = "Perspective correction",
+        [PoseCorrectorType.YawCorrection]           = "Yaw correction",
     };
 
-    // Each factory function receives the current frame list and the aspect ratio.
-    // Simple correctors ignore both; PerspectiveDistortionCorrector uses them to calibrate.
-    private static readonly Dictionary<PoseCorrectorType, Func<List<PoseFrame>, double, PoseCorrector>> Factories = new()
+    // Each factory function receives the frame list, aspect ratio, and yaw method.
+    // Most correctors ignore the yaw method; YawCorrection ignores the aspect ratio.
+    private static readonly Dictionary<PoseCorrectorType, Func<List<PoseFrame>, double, YawCorrectionMethod, PoseCorrector>> Factories = new()
     {
-        [PoseCorrectorType.VisibilityInterpolation] = (_, _)       => new VisibilityInterpolator(),
-        [PoseCorrectorType.TemporalSmoothing]       = (_, _)       => new TemporalSmoothingCorrector(),
-        [PoseCorrectorType.PerspectiveCorrection]   = (frames, ar) => PerspectiveDistortionCorrector.CalibrateFrom(frames, ar),
+        [PoseCorrectorType.VisibilityInterpolation] = (_, _, _)          => new VisibilityInterpolator(),
+        [PoseCorrectorType.TemporalSmoothing]       = (_, _, _)          => new TemporalSmoothingCorrector(),
+        [PoseCorrectorType.PerspectiveCorrection]   = (frames, ar, _)    => PerspectiveDistortionCorrector.CalibrateFrom(frames, ar),
+        [PoseCorrectorType.YawCorrection]           = (_, _, method)     => new YawCorrector(method),
     };
 
     /// <summary>Returns the UI display label for a preprocessing step.</summary>
@@ -44,7 +47,9 @@ public static class PoseCorrectorFactory
     /// Returns a fully configured <see cref="PoseCorrector"/> for the given step.
     /// Steps that require calibration (e.g. perspective correction) use
     /// <paramref name="frames"/> and <paramref name="aspectRatio"/> to do so.
+    /// <paramref name="yawMethod"/> is used only for <see cref="PoseCorrectorType.YawCorrection"/>.
     /// </summary>
-    public static PoseCorrector GetCorrector(PoseCorrectorType step, List<PoseFrame> frames, double aspectRatio)
-        => Factories[step](frames, aspectRatio);
+    public static PoseCorrector GetCorrector(PoseCorrectorType step, List<PoseFrame> frames, double aspectRatio,
+        YawCorrectionMethod yawMethod = YawCorrectionMethod.Median)
+        => Factories[step](frames, aspectRatio, yawMethod);
 }

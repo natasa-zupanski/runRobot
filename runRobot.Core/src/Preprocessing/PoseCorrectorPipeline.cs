@@ -12,8 +12,8 @@ namespace runRobot.Preprocessing;
 ///   1. VisibilityInterpolation — fill low-visibility landmark gaps
 ///   2. TemporalSmoothing       — Gaussian moving average over time
 ///   3. PerspectiveCorrection   — calibrated unprojection to world coordinates
-///   4. Aspect ratio scaling    — always applied when aspectRatio != 1.0
-///   5. Yaw correction          — NoYaw / PerFrame / Median
+///   4. Aspect ratio scaling    — always applied when aspectRatio != 1.0 (between PDC and yaw)
+///   5. YawCorrection           — NoYaw / PerFrame / Median (optional step)
 /// </summary>
 public class PoseCorrectorPipeline
 {
@@ -29,30 +29,22 @@ public class PoseCorrectorPipeline
     }
 
     /// <summary>
-    /// Applies the configured corrector steps to raw pose frames.
-    /// The returned frames are in world-space coordinates if
-    /// <see cref="PoseCorrectorType.PerspectiveCorrection"/> is active.
+    /// Applies the configured corrector steps to raw pose frames, including AR scaling
+    /// and optional yaw correction. The returned frames are in AR-scaled, yaw-aligned
+    /// world-space coordinates when <see cref="PoseCorrectorType.PerspectiveCorrection"/>
+    /// and <see cref="PoseCorrectorType.YawCorrection"/> are both active.
     /// Pass the result to <see cref="Project"/> to obtain 2D side-view frames.
     /// </summary>
     public List<PoseFrame> Correct(List<PoseFrame> frames, double aspectRatio = 1.0)
     {
+        // Non-yaw correction steps first (VisibilityInterpolation, TemporalSmoothing, PerspectiveCorrection).
         var result = frames;
-        foreach (var step in PoseCorrectorFactory.Order.Where(_steps.Contains))
-            result = PoseCorrectorFactory.GetCorrector(step, result, aspectRatio).CorrectAll(result);
-        return result;
-    }
+        foreach (var step in PoseCorrectorFactory.Order.Where(s => s != PoseCorrectorType.YawCorrection && _steps.Contains(s)))
+            result = PoseCorrectorFactory.GetCorrector(step, result, aspectRatio, _method).CorrectAll(result);
 
-    /// <summary>
-    /// Applies aspect-ratio scaling and yaw correction to corrected pose frames,
-    /// then projects them into 2D <see cref="SideViewFrame"/>s.
-    /// Call <see cref="MethodUsed"/> afterwards to confirm the yaw strategy used.
-    /// </summary>
-    public List<SideViewFrame> Project(List<PoseFrame> corrected, double aspectRatio = 1.0)
-    {
-        var worldFrames = corrected;
-
+        // AR scaling must precede yaw so world-X distances are accurate before rotation.
         if (aspectRatio != 1.0)
-            worldFrames = [.. worldFrames.Select(frame =>
+            result = [.. result.Select(frame =>
             {
                 var scaled = new PoseFrame { Timestamp = frame.Timestamp, FrameNumber = frame.FrameNumber };
                 scaled.Landmarks.AddRange(frame.Landmarks.Select(lm => new Landmark
@@ -62,15 +54,21 @@ public class PoseCorrectorPipeline
                 return scaled;
             })];
 
+        // Yaw correction runs last (optional).
         MethodUsed = _method;
-        var yawCorrected = _method switch
-        {
-            YawCorrectionMethod.NoYaw    => worldFrames,
-            YawCorrectionMethod.PerFrame => new YawCorrector().CorrectAllPerFrame(worldFrames),
-            _                            => YawCorrector.EstimateFrom(worldFrames).CorrectAll(worldFrames),
-        };
+        if (_steps.Contains(PoseCorrectorType.YawCorrection))
+            result = PoseCorrectorFactory.GetCorrector(PoseCorrectorType.YawCorrection, result, aspectRatio, _method).CorrectAll(result);
 
-        return [.. yawCorrected.Select(frame =>
+        return result;
+    }
+
+    /// <summary>
+    /// Projects corrected pose frames into 2D <see cref="SideViewFrame"/>s by stripping Z.
+    /// AR scaling and yaw correction are applied upstream in <see cref="Correct"/>.
+    /// </summary>
+    public static List<SideViewFrame> Project(List<PoseFrame> corrected)
+    {
+        return [.. corrected.Select(frame =>
         {
             var sv = new SideViewFrame { Timestamp = frame.Timestamp, FrameNumber = frame.FrameNumber };
             sv.Landmarks.AddRange(frame.Landmarks.Select(lm => new Landmark2D { X = lm.X, Y = lm.Y, Visibility = lm.Visibility }));

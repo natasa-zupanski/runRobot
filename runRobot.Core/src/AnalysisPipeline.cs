@@ -53,7 +53,7 @@ public class AnalysisPipeline(string scriptPath)
         var (estimatedSteps, stepDebugLog) = CountSteps(correctedFrames, settings);
 
         progress?.Report("Estimating speed…");
-        var speedResult = await EstimateSpeedAsync(pipeline, correctedFrames, aspectRatio, hipHeightMeters, settings.StanceTolerance / 100.0);
+        var speedResult = await EstimateSpeedAsync(pipeline, correctedFrames, hipHeightMeters, settings.StanceTolerance / 100.0);
 
         var calorieResult = EstimateCalories(speedResult, weightKg);
 
@@ -94,11 +94,11 @@ public class AnalysisPipeline(string scriptPath)
 
     private static async Task<SpeedEstimationResult> EstimateSpeedAsync(
         PoseCorrectorPipeline pipeline, List<PoseFrame> corrected,
-        double aspectRatio, double? hipHeightMeters, double stanceTolerance)
+        double? hipHeightMeters, double stanceTolerance)
     {
         return await Task.Run(() =>
         {
-            var projected = pipeline.Project(corrected, aspectRatio);
+            var projected = PoseCorrectorPipeline.Project(corrected);
             return new SpeedEstimator(stanceTolerance)
                 .Estimate(projected, hipHeightMeters, methodUsed: pipeline.MethodUsed);
         });

@@ -38,6 +38,34 @@ public class YawCorrector(double yawAngleRadians = 0.0) : FramewiseCorrector
     /// </summary>
     public double YawAngleRadians { get; private set; } = yawAngleRadians;
 
+    private readonly YawCorrectionMethod _method;
+    private readonly bool _dispatch;
+
+    /// <summary>
+    /// Constructs a method-aware corrector that dispatches <see cref="CorrectAll"/>
+    /// based on <paramref name="method"/>. Used by <see cref="PoseCorrectorFactory"/>.
+    /// </summary>
+    public YawCorrector(YawCorrectionMethod method) : this(0.0)
+    {
+        _method  = method;
+        _dispatch = true;
+    }
+
+    /// <summary>
+    /// When constructed via <see cref="YawCorrector(YawCorrectionMethod)"/>, dispatches
+    /// to <see cref="NoYaw"/>, <see cref="CorrectAllPerFrame"/>, or median estimation.
+    /// Otherwise falls through to <see cref="FramewiseCorrector.CorrectAll"/>.
+    /// </summary>
+    public override List<PoseFrame> CorrectAll(List<PoseFrame> frames) =>
+        _dispatch ? Dispatch(frames) : base.CorrectAll(frames);
+
+    private List<PoseFrame> Dispatch(List<PoseFrame> frames) => _method switch
+    {
+        YawCorrectionMethod.NoYaw    => frames,
+        YawCorrectionMethod.PerFrame => CorrectAllPerFrame(frames),
+        _                            => EstimateFrom(frames).CorrectAll(frames),
+    };
+
     /// <summary>
     /// Estimates yaw from a sequence of perspective-corrected world-coord frames
     /// and returns a corrector ready to use.
