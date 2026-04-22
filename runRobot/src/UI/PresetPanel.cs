@@ -34,12 +34,7 @@ public class PresetPanel : UserControl
     private int?   MaxFrames      => int.TryParse(_maxFramesBox.Text, out int mf) && mf > 0 ? mf : null;
     private double StepThreshold  => double.TryParse(_stepThresholdBox.Text,  out double th) ? th : 0;
     private double StanceTolerance => (double.TryParse(_stanceToleranceBox.Text, out double st) ? st : 5.0) / 100.0;
-    private YawCorrectionMethod YawMethod => _yawMethodCombo.SelectedIndex switch
-    {
-        1 => YawCorrectionMethod.PerFrame,
-        2 => YawCorrectionMethod.NoYaw,
-        _ => YawCorrectionMethod.Median,
-    };
+    private YawCorrectionMethod YawMethod => Enum.GetValues<YawCorrectionMethod>()[_yawMethodCombo.SelectedIndex];
 
     /// <summary>Snapshot of current UI state as a SettingsPreset (Name left empty).</summary>
     public SettingsPreset CurrentSettings => new()
@@ -113,15 +108,8 @@ public class PresetPanel : UserControl
         table.Controls.Add(_debugStepsBox, 0, 6);
         table.SetColumnSpan(_debugStepsBox, 2);
 
-        // Row 7: yaw correction
-        table.Controls.Add(new SideLabel("Yaw correction"), 0, 7);
-        _yawMethodCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 1, 0, 0) };
-        _yawMethodCombo.Items.AddRange((string[])["Median", "Per Frame", "No Yaw"]);
-        _yawMethodCombo.SelectedIndex = 0;
-        table.Controls.Add(_yawMethodCombo, 1, 7);
-
-        // Rows 8+: one checkbox per PoseCorrectorType, in pipeline application order
-        int stepRow = 8;
+        // Rows 7+: one checkbox per PoseCorrectorType, in pipeline application order
+        int stepRow = 7;
         foreach (var step in PoseCorrectorFactory.Order)
         {
             var box = new CheckBox { Text = PoseCorrectorFactory.GetLabel(step), AutoSize = true, Checked = true, Margin = new Padding(0, 2, 0, 0) };
@@ -129,6 +117,15 @@ public class PresetPanel : UserControl
             table.Controls.Add(box, 0, stepRow);
             table.SetColumnSpan(box, 2);
             stepRow++;
+            if (step == PoseCorrectorType.YawCorrection)
+            {
+                table.Controls.Add(new SideLabel("Yaw correction"), 0, stepRow);
+                _yawMethodCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 1, 0, 0) };
+                _yawMethodCombo.Items.AddRange(Enum.GetValues<YawCorrectionMethod>().Select(v => v.ToString()).ToArray());
+                _yawMethodCombo.SelectedIndex = 0;
+                table.Controls.Add(_yawMethodCombo, 1, stepRow);
+                stepRow++;
+            }
         }
 
         Controls.Add(table);
