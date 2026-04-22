@@ -60,6 +60,8 @@ class PoseAnalyzer:
             options = vision.PoseLandmarkerOptions(
                 base_options=base_options,
                 running_mode=vision.RunningMode.VIDEO,
+                min_pose_presence_confidence=0.3,  # lower = fewer tracking resets on occluded feet/heels
+                min_tracking_confidence=0.3,        # lower = fewer spurious re-detections mid-run
             )
             self.pose = vision.PoseLandmarker.create_from_options(options)
             print("Using MediaPipe Tasks PoseLandmarker", file=sys.stderr)
